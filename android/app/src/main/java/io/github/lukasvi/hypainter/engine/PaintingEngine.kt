@@ -20,6 +20,10 @@ interface PaintingEngine {
 
     fun exportPng(path: String): Boolean
 
+    fun saveProject(path: String): Boolean
+
+    fun loadProject(path: String): Boolean
+
     fun snapshot(): EngineSnapshot
 }
 

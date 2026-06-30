@@ -57,3 +57,4 @@ Current bridge status:
 - Gradle builds `hyp_ffi` for `arm64-v8a` and packages `libhyp_ffi.so` into the debug APK when the Rust Android target is installed.
 - When native loading succeeds, committed strokes are rendered by Rust into RGBA and displayed in the Compose canvas as an image layer.
 - The canvas has MVP controls for clear, undo, brush color, brush size, pressure readout, and PNG export to app-private storage.
+- The app can save and load an app-private draft file containing committed strokes and per-stroke brush settings.

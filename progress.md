@@ -126,3 +126,24 @@
 - `README.md`、`android/README.md`、`rust/README.md`：更新 MVP 控制和导出状态。
 - 当前限制：导出目前写入 app-private 文件，尚未接 Android 分享面板或系统文件选择器；仍缺图层 UI 和项目保存加载。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 Android UI/engine 和 `HyP_ffi` 本轮修改。
+
+## 2026-06-30 - Task: 增加项目保存与加载闭环
+
+### What was done
+- `PaintingEngine` 新增项目保存和加载接口，native engine 与 Kotlin fallback 均实现。
+- 新增 `ProjectCodec`，使用简单文本草稿格式保存画布尺寸、已提交笔画、每笔画刷颜色和半径、采样点数据。
+- Compose 工具条新增 Save/Load 按钮，保存到 app-private `hypainter-project.hyp`，加载后恢复笔画并刷新画布。
+- Native engine 保留 committed stroke history，用于项目保存；加载项目时会清空 Rust 文档、逐笔设置 brush 并重新提交到 native 渲染核心。
+
+### Testing
+- `cd rust; cargo fmt --all -- --check; cargo test`：通过。
+- `.\gradlew.bat :android:app:assembleDebug --stacktrace`：通过。
+- 检查 APK 内容确认存在 `lib/arm64-v8a/libhyp_ffi.so`，大小为 `4993024` bytes。
+
+### Notes
+- `android/app/src/main/java/io/github/lukasvi/hypainter/engine/ProjectCodec.kt`：新增草稿项目保存加载编解码。
+- `android/app/src/main/java/io/github/lukasvi/hypainter/engine/**`：新增 save/load project 接口与 native/fallback 实现。
+- `android/app/src/main/java/io/github/lukasvi/hypainter/MainActivity.kt`：新增 Save/Load UI 控制。
+- `README.md`、`android/README.md`：更新 app-private 项目保存加载状态。
+- 当前限制：保存格式是 MVP 草稿格式，还不是正式 `.pdraw` 容器；Load 固定读取 app-private 默认路径，尚未接文件管理页。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，删除 `ProjectCodec.kt` 并还原 engine/MainActivity/README/progress 本轮修改。

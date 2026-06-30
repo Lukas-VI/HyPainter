@@ -59,6 +59,17 @@ class KotlinPaintingEngine(
         }.getOrDefault(false)
     }
 
+    override fun saveProject(path: String): Boolean {
+        return ProjectCodec.save(path, snapshot())
+    }
+
+    override fun loadProject(path: String): Boolean {
+        val project = ProjectCodec.load(path) ?: return false
+        clear()
+        committedStrokes.addAll(project.strokes)
+        return true
+    }
+
     override fun snapshot(): EngineSnapshot {
         return EngineSnapshot(
             canvasWidth = canvasWidth,

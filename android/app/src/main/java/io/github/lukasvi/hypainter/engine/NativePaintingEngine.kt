@@ -18,6 +18,7 @@ class NativePaintingEngine private constructor(
     private var renderedImage: ImageBitmap? = null
     private var renderedBitmap: Bitmap? = null
     private var brush = EngineBrush(colorArgb = AndroidColor.BLACK, radiusPx = 8f)
+    private val committedStrokes = mutableListOf<EngineStroke>()
 
     override fun beginStroke(sample: EngineSample) {
         fallbackPreview.beginStroke(sample)
@@ -40,12 +41,16 @@ class NativePaintingEngine private constructor(
             samples[offset + 5] = sample.timestamp.toFloat()
         }
         nativeAppendStroke(handle, samples)
+        committedStrokes.add(stroke)
         fallbackPreview.clear()
         refreshRenderedImage()
     }
 
     override fun undo() {
         if (nativeUndo(handle)) {
+            if (committedStrokes.isNotEmpty()) {
+                committedStrokes.removeAt(committedStrokes.lastIndex)
+            }
             refreshRenderedImage()
         }
     }
@@ -53,6 +58,7 @@ class NativePaintingEngine private constructor(
     override fun clear() {
         nativeClear(handle)
         fallbackPreview.clear()
+        committedStrokes.clear()
         renderedImage = null
         renderedBitmap = null
     }
@@ -80,13 +86,29 @@ class NativePaintingEngine private constructor(
         }.getOrDefault(false)
     }
 
+    override fun saveProject(path: String): Boolean {
+        return ProjectCodec.save(path, snapshot())
+    }
+
+    override fun loadProject(path: String): Boolean {
+        val project = ProjectCodec.load(path) ?: return false
+        clear()
+        project.strokes.forEach { stroke ->
+            setBrush(stroke.brush)
+            appendNativeStroke(stroke)
+            committedStrokes.add(stroke)
+        }
+        refreshRenderedImage()
+        return true
+    }
+
     override fun snapshot(): EngineSnapshot {
         val preview = fallbackPreview.snapshot()
         return EngineSnapshot(
             canvasWidth = canvasWidth,
             canvasHeight = canvasHeight,
             brush = brush,
-            committedStrokes = emptyList(),
+            committedStrokes = committedStrokes.toList(),
             activeStroke = preview.activeStroke,
             renderedImage = renderedImage,
         )
@@ -100,6 +122,20 @@ class NativePaintingEngine private constructor(
     private fun refreshRenderedImage() {
         renderedBitmap = rgbaToBitmap(nativeRenderRgba(handle), canvasWidth, canvasHeight)
         renderedImage = renderedBitmap?.asImageBitmap()
+    }
+
+    private fun appendNativeStroke(stroke: EngineStroke): Boolean {
+        val samples = FloatArray(stroke.points.size * SAMPLE_STRIDE)
+        stroke.points.forEachIndexed { index, sample ->
+            val offset = index * SAMPLE_STRIDE
+            samples[offset] = sample.position.x
+            samples[offset + 1] = sample.position.y
+            samples[offset + 2] = sample.pressure
+            samples[offset + 3] = sample.tiltX
+            samples[offset + 4] = sample.tiltY
+            samples[offset + 5] = sample.timestamp.toFloat()
+        }
+        return nativeAppendStroke(handle, samples)
     }
 
     protected fun finalize() {

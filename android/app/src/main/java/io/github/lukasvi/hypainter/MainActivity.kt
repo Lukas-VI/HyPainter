@@ -33,7 +33,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import io.github.lukasvi.hypainter.engine.EngineSample
 import io.github.lukasvi.hypainter.engine.EngineStroke
-import io.github.lukasvi.hypainter.engine.EngineBrush
 import io.github.lukasvi.hypainter.engine.PaintingEngine
 import io.github.lukasvi.hypainter.engine.createPaintingEngine
 import java.io.File
@@ -64,6 +63,7 @@ private fun CanvasScreen() {
     val viewport = remember { mutableStateOf(ViewportState()) }
     val latestPressure = remember { mutableStateOf(0f) }
     val exportStatus = remember { mutableStateOf<String?>(null) }
+    val projectStatus = remember { mutableStateOf<String?>(null) }
     val snapshot = remember(version.value) { engine.snapshot() }
 
     Box(
@@ -174,6 +174,31 @@ private fun CanvasScreen() {
                     }
                 },
                 label = { Text(exportStatus.value ?: "Export") },
+            )
+            Box(modifier = Modifier.size(8.dp))
+            AssistChip(
+                onClick = {
+                    val output = File(context.filesDir, "hypainter-project.hyp")
+                    projectStatus.value = if (engine.saveProject(output.absolutePath)) {
+                        "Saved"
+                    } else {
+                        "Save failed"
+                    }
+                },
+                label = { Text(projectStatus.value ?: "Save") },
+            )
+            Box(modifier = Modifier.size(8.dp))
+            AssistChip(
+                onClick = {
+                    val input = File(context.filesDir, "hypainter-project.hyp")
+                    projectStatus.value = if (engine.loadProject(input.absolutePath)) {
+                        version.value++
+                        "Loaded"
+                    } else {
+                        "Load failed"
+                    }
+                },
+                label = { Text("Load") },
             )
         }
     }

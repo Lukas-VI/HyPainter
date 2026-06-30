@@ -16,6 +16,12 @@ interface PaintingEngine {
 
     fun clear()
 
+    fun addLayer()
+
+    fun selectLayer(layerId: Long)
+
+    fun toggleLayerVisibility(layerId: Long)
+
     fun setBrush(brush: EngineBrush)
 
     fun exportPng(path: String): Boolean
@@ -38,6 +44,13 @@ data class EngineSample(
 data class EngineStroke(
     val points: List<EngineSample>,
     val brush: EngineBrush,
+    val layerId: Long,
+)
+
+data class EngineLayer(
+    val id: Long,
+    val name: String,
+    val visible: Boolean,
 )
 
 data class EngineBrush(
@@ -49,6 +62,8 @@ data class EngineSnapshot(
     val canvasWidth: Int,
     val canvasHeight: Int,
     val brush: EngineBrush,
+    val layers: List<EngineLayer>,
+    val activeLayerId: Long,
     val committedStrokes: List<EngineStroke>,
     val activeStroke: EngineStroke?,
     val renderedImage: ImageBitmap? = null,

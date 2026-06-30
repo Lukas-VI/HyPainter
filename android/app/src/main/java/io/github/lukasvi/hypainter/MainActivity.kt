@@ -7,11 +7,13 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -104,7 +106,8 @@ private fun CanvasScreen() {
         Row(
             modifier = Modifier
                 .align(Alignment.TopStart)
-                .padding(16.dp),
+                .padding(16.dp)
+                .horizontalScroll(rememberScrollState()),
         ) {
             AssistChip(
                 onClick = {
@@ -200,6 +203,36 @@ private fun CanvasScreen() {
                 },
                 label = { Text("Load") },
             )
+            Box(modifier = Modifier.size(8.dp))
+            AssistChip(
+                onClick = {
+                    engine.addLayer()
+                    version.value++
+                },
+                label = { Text("+ Layer") },
+            )
+            snapshot.layers.forEach { layer ->
+                Box(modifier = Modifier.size(8.dp))
+                AssistChip(
+                    onClick = {
+                        engine.selectLayer(layer.id)
+                        version.value++
+                    },
+                    label = {
+                        Text(
+                            "${if (layer.id == snapshot.activeLayerId) "*" else ""}${layer.name}",
+                        )
+                    },
+                )
+                Box(modifier = Modifier.size(8.dp))
+                AssistChip(
+                    onClick = {
+                        engine.toggleLayerVisibility(layer.id)
+                        version.value++
+                    },
+                    label = { Text(if (layer.visible) "Hide" else "Show") },
+                )
+            }
         }
     }
 }

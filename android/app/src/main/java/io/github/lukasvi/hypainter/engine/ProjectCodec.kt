@@ -12,8 +12,14 @@ object ProjectCodec {
             File(path).printWriter().use { writer ->
                 writer.println(HEADER)
                 writer.println("CANVAS ${snapshot.canvasWidth} ${snapshot.canvasHeight}")
+                writer.println("ACTIVE_LAYER ${snapshot.activeLayerId}")
+                snapshot.layers.forEach { layer ->
+                    writer.println("LAYER ${layer.id} ${if (layer.visible) 1 else 0} ${layer.name}")
+                }
                 snapshot.committedStrokes.forEach { stroke ->
-                    writer.println("STROKE ${stroke.brush.colorArgb} ${stroke.brush.radiusPx} ${stroke.points.size}")
+                    writer.println(
+                        "STROKE ${stroke.layerId} ${stroke.brush.colorArgb} ${stroke.brush.radiusPx} ${stroke.points.size}",
+                    )
                     stroke.points.forEach { sample ->
                         writer.println(
                             listOf(
@@ -40,6 +46,8 @@ object ProjectCodec {
 
             var canvasWidth = 1024
             var canvasHeight = 1024
+            var activeLayerId = 1L
+            val layers = mutableListOf<EngineLayer>()
             val strokes = mutableListOf<EngineStroke>()
             var index = 1
 
@@ -52,10 +60,24 @@ object ProjectCodec {
                         index++
                     }
 
+                    "ACTIVE_LAYER" -> {
+                        activeLayerId = parts.getOrNull(1)?.toLongOrNull() ?: activeLayerId
+                        index++
+                    }
+
+                    "LAYER" -> {
+                        val id = parts.getOrNull(1)?.toLongOrNull() ?: 1L
+                        val visible = parts.getOrNull(2) != "0"
+                        val name = parts.drop(3).joinToString(" ").ifBlank { "Layer $id" }
+                        layers.add(EngineLayer(id, name, visible))
+                        index++
+                    }
+
                     "STROKE" -> {
-                        val color = parts.getOrNull(1)?.toIntOrNull() ?: 0xff000000.toInt()
-                        val radius = parts.getOrNull(2)?.toFloatOrNull() ?: 8f
-                        val count = parts.getOrNull(3)?.toIntOrNull() ?: 0
+                        val layerId = parts.getOrNull(1)?.toLongOrNull() ?: 1L
+                        val color = parts.getOrNull(2)?.toIntOrNull() ?: 0xff000000.toInt()
+                        val radius = parts.getOrNull(3)?.toFloatOrNull() ?: 8f
+                        val count = parts.getOrNull(4)?.toIntOrNull() ?: 0
                         val samples = mutableListOf<EngineSample>()
                         repeat(count) {
                             index++
@@ -65,7 +87,7 @@ object ProjectCodec {
                             }
                         }
                         if (samples.isNotEmpty()) {
-                            strokes.add(EngineStroke(samples, EngineBrush(color, radius)))
+                            strokes.add(EngineStroke(samples, EngineBrush(color, radius), layerId))
                         }
                         index++
                     }
@@ -74,7 +96,14 @@ object ProjectCodec {
                 }
             }
 
-            ProjectData(canvasWidth, canvasHeight, strokes)
+            if (layers.isEmpty()) {
+                layers.add(EngineLayer(1L, "Layer 1", true))
+            }
+            if (layers.none { it.id == activeLayerId }) {
+                activeLayerId = layers.last().id
+            }
+
+            ProjectData(canvasWidth, canvasHeight, layers, activeLayerId, strokes)
         }.getOrNull()
     }
 
@@ -104,5 +133,7 @@ object ProjectCodec {
 data class ProjectData(
     val canvasWidth: Int,
     val canvasHeight: Int,
+    val layers: List<EngineLayer>,
+    val activeLayerId: Long,
     val strokes: List<EngineStroke>,
 )

@@ -19,6 +19,9 @@ class NativePaintingEngine private constructor(
     private var renderedBitmap: Bitmap? = null
     private var brush = EngineBrush(colorArgb = AndroidColor.BLACK, radiusPx = 8f)
     private val committedStrokes = mutableListOf<EngineStroke>()
+    private val layers = mutableListOf(EngineLayer(id = 1L, name = "Layer 1", visible = true))
+    private var activeLayerId = 1L
+    private var nextLayerId = 2L
 
     override fun beginStroke(sample: EngineSample) {
         fallbackPreview.beginStroke(sample)
@@ -41,7 +44,7 @@ class NativePaintingEngine private constructor(
             samples[offset + 5] = sample.timestamp.toFloat()
         }
         nativeAppendStroke(handle, samples)
-        committedStrokes.add(stroke)
+        committedStrokes.add(stroke.copy(layerId = activeLayerId))
         fallbackPreview.clear()
         refreshRenderedImage()
     }
@@ -59,8 +62,33 @@ class NativePaintingEngine private constructor(
         nativeClear(handle)
         fallbackPreview.clear()
         committedStrokes.clear()
+        layers.clear()
+        layers.add(EngineLayer(id = 1L, name = "Layer 1", visible = true))
+        activeLayerId = 1L
+        nextLayerId = 2L
         renderedImage = null
         renderedBitmap = null
+    }
+
+    override fun addLayer() {
+        val id = nextLayerId++
+        layers.add(EngineLayer(id = id, name = "Layer ${layers.size + 1}", visible = true))
+        activeLayerId = id
+    }
+
+    override fun selectLayer(layerId: Long) {
+        if (layers.any { it.id == layerId }) {
+            activeLayerId = layerId
+        }
+    }
+
+    override fun toggleLayerVisibility(layerId: Long) {
+        val index = layers.indexOfFirst { it.id == layerId }
+        if (index >= 0) {
+            val layer = layers[index]
+            layers[index] = layer.copy(visible = !layer.visible)
+            rebuildNativeDocument()
+        }
     }
 
     override fun setBrush(brush: EngineBrush) {
@@ -93,12 +121,14 @@ class NativePaintingEngine private constructor(
     override fun loadProject(path: String): Boolean {
         val project = ProjectCodec.load(path) ?: return false
         clear()
+        layers.clear()
+        layers.addAll(project.layers)
+        activeLayerId = project.activeLayerId
+        nextLayerId = (layers.maxOfOrNull { it.id } ?: 0L) + 1L
         project.strokes.forEach { stroke ->
-            setBrush(stroke.brush)
-            appendNativeStroke(stroke)
             committedStrokes.add(stroke)
         }
-        refreshRenderedImage()
+        rebuildNativeDocument()
         return true
     }
 
@@ -108,6 +138,8 @@ class NativePaintingEngine private constructor(
             canvasWidth = canvasWidth,
             canvasHeight = canvasHeight,
             brush = brush,
+            layers = layers.toList(),
+            activeLayerId = activeLayerId,
             committedStrokes = committedStrokes.toList(),
             activeStroke = preview.activeStroke,
             renderedImage = renderedImage,
@@ -122,6 +154,19 @@ class NativePaintingEngine private constructor(
     private fun refreshRenderedImage() {
         renderedBitmap = rgbaToBitmap(nativeRenderRgba(handle), canvasWidth, canvasHeight)
         renderedImage = renderedBitmap?.asImageBitmap()
+    }
+
+    private fun rebuildNativeDocument() {
+        nativeClear(handle)
+        val currentBrush = brush
+        committedStrokes
+            .filter { stroke -> layers.firstOrNull { it.id == stroke.layerId }?.visible == true }
+            .forEach { stroke ->
+                setBrush(stroke.brush)
+                appendNativeStroke(stroke)
+            }
+        setBrush(currentBrush)
+        refreshRenderedImage()
     }
 
     private fun appendNativeStroke(stroke: EngineStroke): Boolean {

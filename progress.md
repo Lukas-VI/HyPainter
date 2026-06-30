@@ -147,3 +147,25 @@
 - `README.md`、`android/README.md`：更新 app-private 项目保存加载状态。
 - 当前限制：保存格式是 MVP 草稿格式，还不是正式 `.pdraw` 容器；Load 固定读取 app-private 默认路径，尚未接文件管理页。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，删除 `ProjectCodec.kt` 并还原 engine/MainActivity/README/progress 本轮修改。
+
+## 2026-06-30 - Task: 增加 MVP 图层控制
+
+### What was done
+- `PaintingEngine` 新增图层模型和操作接口：新增图层、选择当前图层、切换图层可见性。
+- 每条笔画新增 `layerId`，新笔画会提交到当前图层。
+- Kotlin fallback 渲染、native engine 重放、PNG 导出和项目保存加载均按图层可见性过滤。
+- Compose 工具条新增横向滚动，加入 `+ Layer`、图层选择和 Hide/Show 控制。
+- 草稿项目格式新增 active layer、layer metadata 和 stroke layer id，加载后可恢复图层状态。
+
+### Testing
+- `cd rust; cargo fmt --all -- --check; cargo test`：通过。
+- `.\gradlew.bat :android:app:assembleDebug --stacktrace`：通过。
+
+### Notes
+- `android/app/src/main/java/io/github/lukasvi/hypainter/engine/PaintingEngine.kt`：新增 `EngineLayer` 与图层操作接口。
+- `android/app/src/main/java/io/github/lukasvi/hypainter/engine/KotlinPaintingEngine.kt`：实现图层状态、可见性过滤和图层持久化加载。
+- `android/app/src/main/java/io/github/lukasvi/hypainter/engine/NativePaintingEngine.kt`：通过清空并重放可见图层笔画刷新 Rust render。
+- `android/app/src/main/java/io/github/lukasvi/hypainter/engine/ProjectCodec.kt`：保存/加载图层元数据和 stroke layer id。
+- `android/app/src/main/java/io/github/lukasvi/hypainter/MainActivity.kt`：新增横向滚动工具条和图层控制。
+- 当前限制：图层实现是 MVP 语义层，Rust core 仍是单 raster document，通过 Android 侧可见图层重放实现显隐；还没有图层重排、透明度和合并。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 engine、ProjectCodec、MainActivity 和 README/progress 本轮修改。

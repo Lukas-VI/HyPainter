@@ -18,5 +18,6 @@ Current app status:
 - Displays the native RGBA render result as a Compose canvas image when `NativePaintingEngine` loads.
 - Provides MVP controls for brush color, brush size, clear, undo, pressure readout, and PNG export.
 - Saves and loads an app-private draft project file for committed strokes and brush settings.
+- Provides MVP layer controls: add layer, select active layer, hide/show layer, and persist layer metadata.
 
-The next step is adding the remaining MVP product controls: visible layer UI and a user-facing export/share destination.
+The next step is adding a user-facing export/share destination and improving the visual layout beyond the current single-row MVP toolbar.

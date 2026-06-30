@@ -80,3 +80,26 @@
 - `README.md`、`android/README.md`、`rust/README.md`：更新 native 打包状态与构建说明。
 - 当前限制：APK 已包含 native 库，但画布可视结果仍使用 Kotlin preview；下一步需要把 native RGBA 渲染结果显示到 Compose 画布。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，删除脚本、还原 Gradle native hook 和 `HyP_ffi` JNI 补充。
+
+## 2026-06-30 - Task: 显示 Rust 引擎渲染结果
+
+### What was done
+- 扩展 `PaintingEngine` snapshot，加入画布尺寸与 native render image。
+- `NativePaintingEngine` 在提交笔画后调用 Rust `nativeRenderRgba()`，将 RGBA byte array 转换为 Compose `ImageBitmap` 并显示到画布。
+- Compose 画布新增白色画布底色，native image 作为已提交笔画层，活动笔画继续用 Kotlin preview 保持实时反馈。
+- Rust `HyPaintDocument` 记录已提交笔画，新增 undo 重放逻辑，支持 MVP 阶段的笔画级撤销。
+- 补充 `nativeUndo` JNI 入口，并让 Android undo 在 native engine 下调用 Rust undo 后刷新 render image。
+
+### Testing
+- `cd rust; cargo fmt --all -- --check; cargo test`：通过。
+- `.\gradlew.bat :android:app:assembleDebug --stacktrace`：通过。
+- 检查 APK 内容确认存在 `lib/arm64-v8a/libhyp_ffi.so`，大小为 `4989288` bytes。
+- 使用 NDK `llvm-nm` 确认 `.so` 导出 `nativeCreate`、`nativeAppendStroke`、`nativeUndo`、`nativeRenderRgba` JNI 符号。
+
+### Notes
+- `android/app/src/main/java/io/github/lukasvi/hypainter/engine/**`：新增 native image snapshot、RGBA 转 ImageBitmap、native undo 刷新逻辑。
+- `android/app/src/main/java/io/github/lukasvi/hypainter/MainActivity.kt`：画布显示白底、native render image 和活动笔画 preview。
+- `rust/crates/HyP_ffi/src/lib.rs`：新增 stroke replay 存储、undo 重建图层和 JNI undo。
+- `README.md`、`android/README.md`、`rust/README.md`：更新 native render 已进入 Compose 画布的状态。
+- 当前限制：native render 仍是全画布 RGBA 刷新，后续需要 tile/dirty rect 局部刷新；MVP 还缺图层 UI、颜色/笔刷控制、保存加载和导出入口。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 Android engine/MainActivity 和 `HyP_ffi` 本轮修改。

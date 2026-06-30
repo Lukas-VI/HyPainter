@@ -253,6 +253,7 @@ pub struct HyPaintBuffer {
 pub struct HyPaintDocument {
     canvas_size: CanvasSize,
     layers: Vec<RasterLayer>,
+    strokes: Vec<Vec<HyPaintSample>>,
     brush: BrushSettings,
 }
 
@@ -262,6 +263,7 @@ impl HyPaintDocument {
         Self {
             canvas_size,
             layers: vec![RasterLayer::new(1, "Ink", canvas_size)],
+            strokes: Vec::new(),
             brush: BrushSettings::ink(8.0, Rgba8::BLACK),
         }
     }
@@ -271,6 +273,36 @@ impl HyPaintDocument {
             return;
         }
 
+        self.strokes.push(samples.to_vec());
+        self.rasterize_stroke(samples);
+    }
+
+    pub fn clear(&mut self) {
+        self.strokes.clear();
+        self.reset_layers();
+    }
+
+    pub fn undo(&mut self) -> bool {
+        if self.strokes.pop().is_none() {
+            return false;
+        }
+
+        self.reset_layers();
+        for stroke in self.strokes.clone() {
+            self.rasterize_stroke(&stroke);
+        }
+        true
+    }
+
+    pub fn render_rgba(&self) -> Vec<u8> {
+        export_rgba_bytes(self.canvas_size, &self.layers)
+    }
+
+    fn reset_layers(&mut self) {
+        self.layers = vec![RasterLayer::new(1, "Ink", self.canvas_size)];
+    }
+
+    fn rasterize_stroke(&mut self, samples: &[HyPaintSample]) {
         let mut stroke = Stroke::new();
         stroke.append(samples.iter().map(|sample| StylusSample {
             position: hyp_core::Point::new(sample.x, sample.y),
@@ -283,14 +315,6 @@ impl HyPaintDocument {
         if let Some(layer) = self.layers.last_mut() {
             stroke.rasterize(&mut layer.tiles, self.brush);
         }
-    }
-
-    pub fn clear(&mut self) {
-        self.layers = vec![RasterLayer::new(1, "Ink", self.canvas_size)];
-    }
-
-    pub fn render_rgba(&self) -> Vec<u8> {
-        export_rgba_bytes(self.canvas_size, &self.layers)
     }
 }
 
@@ -337,6 +361,15 @@ pub unsafe extern "C" fn hyp_document_clear(document: *mut HyPaintDocument) -> b
 
     document.clear();
     true
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn hyp_document_undo(document: *mut HyPaintDocument) -> bool {
+    let Some(document) = document.as_mut() else {
+        return false;
+    };
+
+    document.undo()
 }
 
 #[no_mangle]
@@ -396,6 +429,15 @@ pub unsafe extern "system" fn Java_io_github_lukasvi_hypainter_engine_NativePain
     handle: JLong,
 ) -> JBoolean {
     hyp_document_clear(handle as *mut HyPaintDocument) as JBoolean
+}
+
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_github_lukasvi_hypainter_engine_NativePaintingEngine_nativeUndo(
+    _env: *mut std::ffi::c_void,
+    _class: *mut std::ffi::c_void,
+    handle: JLong,
+) -> JBoolean {
+    hyp_document_undo(handle as *mut HyPaintDocument) as JBoolean
 }
 
 #[no_mangle]
@@ -518,5 +560,23 @@ mod tests {
         let document = hyp_document_create(0, 32);
 
         assert!(document.is_null());
+    }
+
+    #[test]
+    fn ffi_undo_rebuilds_without_last_stroke() {
+        let mut document = HyPaintDocument::new(32, 32);
+        document.append_stroke(&[HyPaintSample {
+            x: 8.0,
+            y: 8.0,
+            pressure: 1.0,
+            tilt_x: 0.0,
+            tilt_y: 0.0,
+            timestamp_ms: 0,
+        }]);
+        assert!(document.render_rgba().iter().any(|value| *value != 0));
+
+        assert!(document.undo());
+
+        assert!(document.render_rgba().iter().all(|value| *value == 0));
     }
 }

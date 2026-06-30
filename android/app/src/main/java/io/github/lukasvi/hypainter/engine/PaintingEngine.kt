@@ -1,6 +1,7 @@
 package io.github.lukasvi.hypainter.engine
 
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.ImageBitmap
 
 interface PaintingEngine {
     val nativeBacked: Boolean
@@ -31,10 +32,13 @@ data class EngineStroke(
 )
 
 data class EngineSnapshot(
+    val canvasWidth: Int,
+    val canvasHeight: Int,
     val committedStrokes: List<EngineStroke>,
     val activeStroke: EngineStroke?,
+    val renderedImage: ImageBitmap? = null,
 )
 
-fun createPaintingEngine(width: Int = 4096, height: Int = 4096): PaintingEngine {
+fun createPaintingEngine(width: Int = 1024, height: Int = 1024): PaintingEngine {
     return NativePaintingEngine.createOrNull(width, height) ?: KotlinPaintingEngine()
 }

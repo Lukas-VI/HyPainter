@@ -55,3 +55,4 @@ Current bridge status:
 - `NativePaintingEngine` defines the Android native method boundary for `hyp_ffi`.
 - `hyp_ffi` exposes the first C ABI/JNI entry points for document lifecycle, clear, stroke submission, and RGBA rendering.
 - Gradle builds `hyp_ffi` for `arm64-v8a` and packages `libhyp_ffi.so` into the debug APK when the Rust Android target is installed.
+- When native loading succeeds, committed strokes are rendered by Rust into RGBA and displayed in the Compose canvas as an image layer.

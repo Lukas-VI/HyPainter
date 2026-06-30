@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.input.pointer.pointerInteropFilter
@@ -84,6 +85,10 @@ private fun CanvasScreen() {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val state = viewport.value
             withTransformCompat(state) {
+                drawCanvasBackground(snapshot.canvasWidth, snapshot.canvasHeight)
+                snapshot.renderedImage?.let { image ->
+                    drawImage(image)
+                }
                 snapshot.committedStrokes.forEach { stroke ->
                     drawStroke(stroke)
                 }
@@ -174,9 +179,9 @@ private fun handleStylusEvent(
     return true
 }
 
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.withTransformCompat(
+private fun DrawScope.withTransformCompat(
     viewport: ViewportState,
-    block: androidx.compose.ui.graphics.drawscope.DrawScope.() -> Unit,
+    block: DrawScope.() -> Unit,
 ) {
     withTransform({
         translate(viewport.pan.x, viewport.pan.y)
@@ -187,7 +192,14 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.withTransformCompat
     }
 }
 
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawStroke(stroke: EngineStroke) {
+private fun DrawScope.drawCanvasBackground(width: Int, height: Int) {
+    drawRect(
+        color = Color.White,
+        size = androidx.compose.ui.geometry.Size(width.toFloat(), height.toFloat()),
+    )
+}
+
+private fun DrawScope.drawStroke(stroke: EngineStroke) {
     stroke.points.zipWithNext().forEach { (from, to) ->
         drawLine(
             color = Color.Black.copy(alpha = to.pressure.coerceIn(0.1f, 1f)),

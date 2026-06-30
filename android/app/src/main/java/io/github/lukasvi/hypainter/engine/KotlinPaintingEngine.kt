@@ -1,6 +1,9 @@
 package io.github.lukasvi.hypainter.engine
 
-class KotlinPaintingEngine : PaintingEngine {
+class KotlinPaintingEngine(
+    private val canvasWidth: Int = 1024,
+    private val canvasHeight: Int = 1024,
+) : PaintingEngine {
     override val nativeBacked: Boolean = false
 
     private val committedStrokes = mutableListOf<EngineStroke>()
@@ -39,6 +42,8 @@ class KotlinPaintingEngine : PaintingEngine {
 
     override fun snapshot(): EngineSnapshot {
         return EngineSnapshot(
+            canvasWidth = canvasWidth,
+            canvasHeight = canvasHeight,
             committedStrokes = committedStrokes.toList(),
             activeStroke = activeStroke.takeIf { it.isNotEmpty() }?.let { EngineStroke(it.toList()) },
         )

@@ -1,11 +1,18 @@
 package io.github.lukasvi.hypainter.engine
 
+import android.graphics.Bitmap
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+
 class NativePaintingEngine private constructor(
     private val handle: Long,
+    private val canvasWidth: Int,
+    private val canvasHeight: Int,
 ) : PaintingEngine {
     override val nativeBacked: Boolean = true
 
-    private val fallbackPreview = KotlinPaintingEngine()
+    private val fallbackPreview = KotlinPaintingEngine(canvasWidth, canvasHeight)
+    private var renderedImage: ImageBitmap? = null
 
     override fun beginStroke(sample: EngineSample) {
         fallbackPreview.beginStroke(sample)
@@ -28,26 +35,40 @@ class NativePaintingEngine private constructor(
             samples[offset + 5] = sample.timestamp.toFloat()
         }
         nativeAppendStroke(handle, samples)
-        fallbackPreview.endStroke()
+        fallbackPreview.clear()
+        refreshRenderedImage()
     }
 
     override fun undo() {
-        // Native undo needs tile deltas; keep UI safe until that lands.
-        fallbackPreview.undo()
+        if (nativeUndo(handle)) {
+            refreshRenderedImage()
+        }
     }
 
     override fun clear() {
         nativeClear(handle)
         fallbackPreview.clear()
+        renderedImage = null
     }
 
     override fun snapshot(): EngineSnapshot {
-        return fallbackPreview.snapshot()
+        val preview = fallbackPreview.snapshot()
+        return EngineSnapshot(
+            canvasWidth = canvasWidth,
+            canvasHeight = canvasHeight,
+            committedStrokes = emptyList(),
+            activeStroke = preview.activeStroke,
+            renderedImage = renderedImage,
+        )
     }
 
     @Suppress("unused")
     fun renderRgba(): ByteArray {
         return nativeRenderRgba(handle)
+    }
+
+    private fun refreshRenderedImage() {
+        renderedImage = rgbaToImageBitmap(nativeRenderRgba(handle), canvasWidth, canvasHeight)
     }
 
     protected fun finalize() {
@@ -64,7 +85,7 @@ class NativePaintingEngine private constructor(
             }
 
             val handle = nativeCreate(width, height)
-            return if (handle == 0L) null else NativePaintingEngine(handle)
+            return if (handle == 0L) null else NativePaintingEngine(handle, width, height)
         }
 
         private fun ensureLibraryLoaded(): Boolean {
@@ -94,6 +115,31 @@ class NativePaintingEngine private constructor(
         private external fun nativeClear(handle: Long): Boolean
 
         @JvmStatic
+        private external fun nativeUndo(handle: Long): Boolean
+
+        @JvmStatic
         private external fun nativeRenderRgba(handle: Long): ByteArray
+
+        private fun rgbaToImageBitmap(bytes: ByteArray, width: Int, height: Int): ImageBitmap? {
+            val expectedLength = width * height * 4
+            if (bytes.size != expectedLength) {
+                return null
+            }
+
+            val pixels = IntArray(width * height)
+            var source = 0
+            for (index in pixels.indices) {
+                val r = bytes[source].toInt() and 0xff
+                val g = bytes[source + 1].toInt() and 0xff
+                val b = bytes[source + 2].toInt() and 0xff
+                val a = bytes[source + 3].toInt() and 0xff
+                pixels[index] = (a shl 24) or (r shl 16) or (g shl 8) or b
+                source += 4
+            }
+
+            return Bitmap
+                .createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888)
+                .asImageBitmap()
+        }
     }
 }

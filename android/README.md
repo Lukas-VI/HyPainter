@@ -14,5 +14,6 @@ Current app status:
 - Routes canvas actions through a `PaintingEngine` abstraction.
 - Supports a Kotlin fallback engine for stroke preview, clear, undo, pan, zoom, and rotation.
 - Defines a `NativePaintingEngine` bridge for future `hyp_ffi` shared-library packaging.
+- Packages `libhyp_ffi.so` for `arm64-v8a` through the Gradle Rust build hook when the Rust Android target is installed.
 
-The next step is replacing the temporary Compose stroke store with batched calls into `HyP_ffi`.
+The next step is rendering the native RGBA result back into the Compose canvas instead of keeping the Kotlin preview as the visible source of truth.

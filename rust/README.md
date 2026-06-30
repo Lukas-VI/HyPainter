@@ -19,3 +19,10 @@ Verify with:
 cargo fmt --all -- --check
 cargo test
 ```
+
+Android native build:
+
+```powershell
+rustup target add aarch64-linux-android
+../scripts/build-rust-android.ps1
+```

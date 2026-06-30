@@ -33,6 +33,33 @@ android {
         compose = true
         buildConfig = true
     }
+
+    sourceSets {
+        getByName("main") {
+            jniLibs.srcDir(layout.buildDirectory.dir("generated/rustJniLibs"))
+        }
+    }
+}
+
+val buildRustArm64Debug by tasks.registering(Exec::class) {
+    workingDir = rootDir
+    commandLine(
+        "powershell",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${rootDir}/scripts/build-rust-android.ps1",
+        "-Target",
+        "aarch64-linux-android",
+        "-Abi",
+        "arm64-v8a",
+        "-OutputDir",
+        "${layout.buildDirectory.get().asFile}/generated/rustJniLibs/arm64-v8a",
+    )
+}
+
+tasks.matching { it.name == "mergeDebugJniLibFolders" }.configureEach {
+    dependsOn(buildRustArm64Debug)
 }
 
 dependencies {

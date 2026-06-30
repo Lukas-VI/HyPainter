@@ -8,6 +8,228 @@ use hyp_export::export_rgba_bytes;
 type JBoolean = u8;
 type JInt = i32;
 type JLong = i64;
+type JSize = i32;
+
+#[repr(C)]
+struct JNINativeInterface {
+    reserved0: *mut std::ffi::c_void,
+    reserved1: *mut std::ffi::c_void,
+    reserved2: *mut std::ffi::c_void,
+    reserved3: *mut std::ffi::c_void,
+    get_version: unsafe extern "system" fn(*mut JNIEnv) -> JInt,
+    define_class: *mut std::ffi::c_void,
+    find_class: *mut std::ffi::c_void,
+    from_reflected_method: *mut std::ffi::c_void,
+    from_reflected_field: *mut std::ffi::c_void,
+    to_reflected_method: *mut std::ffi::c_void,
+    get_superclass: *mut std::ffi::c_void,
+    is_assignable_from: *mut std::ffi::c_void,
+    to_reflected_field: *mut std::ffi::c_void,
+    throw: *mut std::ffi::c_void,
+    throw_new: *mut std::ffi::c_void,
+    exception_occurred: *mut std::ffi::c_void,
+    exception_describe: *mut std::ffi::c_void,
+    exception_clear: *mut std::ffi::c_void,
+    fatal_error: *mut std::ffi::c_void,
+    push_local_frame: *mut std::ffi::c_void,
+    pop_local_frame: *mut std::ffi::c_void,
+    new_global_ref: *mut std::ffi::c_void,
+    delete_global_ref: *mut std::ffi::c_void,
+    delete_local_ref: *mut std::ffi::c_void,
+    is_same_object: *mut std::ffi::c_void,
+    new_local_ref: *mut std::ffi::c_void,
+    ensure_local_capacity: *mut std::ffi::c_void,
+    alloc_object: *mut std::ffi::c_void,
+    new_object: *mut std::ffi::c_void,
+    new_object_v: *mut std::ffi::c_void,
+    new_object_a: *mut std::ffi::c_void,
+    get_object_class: *mut std::ffi::c_void,
+    is_instance_of: *mut std::ffi::c_void,
+    get_method_id: *mut std::ffi::c_void,
+    call_object_method: *mut std::ffi::c_void,
+    call_object_method_v: *mut std::ffi::c_void,
+    call_object_method_a: *mut std::ffi::c_void,
+    call_boolean_method: *mut std::ffi::c_void,
+    call_boolean_method_v: *mut std::ffi::c_void,
+    call_boolean_method_a: *mut std::ffi::c_void,
+    call_byte_method: *mut std::ffi::c_void,
+    call_byte_method_v: *mut std::ffi::c_void,
+    call_byte_method_a: *mut std::ffi::c_void,
+    call_char_method: *mut std::ffi::c_void,
+    call_char_method_v: *mut std::ffi::c_void,
+    call_char_method_a: *mut std::ffi::c_void,
+    call_short_method: *mut std::ffi::c_void,
+    call_short_method_v: *mut std::ffi::c_void,
+    call_short_method_a: *mut std::ffi::c_void,
+    call_int_method: *mut std::ffi::c_void,
+    call_int_method_v: *mut std::ffi::c_void,
+    call_int_method_a: *mut std::ffi::c_void,
+    call_long_method: *mut std::ffi::c_void,
+    call_long_method_v: *mut std::ffi::c_void,
+    call_long_method_a: *mut std::ffi::c_void,
+    call_float_method: *mut std::ffi::c_void,
+    call_float_method_v: *mut std::ffi::c_void,
+    call_float_method_a: *mut std::ffi::c_void,
+    call_double_method: *mut std::ffi::c_void,
+    call_double_method_v: *mut std::ffi::c_void,
+    call_double_method_a: *mut std::ffi::c_void,
+    call_void_method: *mut std::ffi::c_void,
+    call_void_method_v: *mut std::ffi::c_void,
+    call_void_method_a: *mut std::ffi::c_void,
+    call_nonvirtual_object_method: *mut std::ffi::c_void,
+    call_nonvirtual_object_method_v: *mut std::ffi::c_void,
+    call_nonvirtual_object_method_a: *mut std::ffi::c_void,
+    call_nonvirtual_boolean_method: *mut std::ffi::c_void,
+    call_nonvirtual_boolean_method_v: *mut std::ffi::c_void,
+    call_nonvirtual_boolean_method_a: *mut std::ffi::c_void,
+    call_nonvirtual_byte_method: *mut std::ffi::c_void,
+    call_nonvirtual_byte_method_v: *mut std::ffi::c_void,
+    call_nonvirtual_byte_method_a: *mut std::ffi::c_void,
+    call_nonvirtual_char_method: *mut std::ffi::c_void,
+    call_nonvirtual_char_method_v: *mut std::ffi::c_void,
+    call_nonvirtual_char_method_a: *mut std::ffi::c_void,
+    call_nonvirtual_short_method: *mut std::ffi::c_void,
+    call_nonvirtual_short_method_v: *mut std::ffi::c_void,
+    call_nonvirtual_short_method_a: *mut std::ffi::c_void,
+    call_nonvirtual_int_method: *mut std::ffi::c_void,
+    call_nonvirtual_int_method_v: *mut std::ffi::c_void,
+    call_nonvirtual_int_method_a: *mut std::ffi::c_void,
+    call_nonvirtual_long_method: *mut std::ffi::c_void,
+    call_nonvirtual_long_method_v: *mut std::ffi::c_void,
+    call_nonvirtual_long_method_a: *mut std::ffi::c_void,
+    call_nonvirtual_float_method: *mut std::ffi::c_void,
+    call_nonvirtual_float_method_v: *mut std::ffi::c_void,
+    call_nonvirtual_float_method_a: *mut std::ffi::c_void,
+    call_nonvirtual_double_method: *mut std::ffi::c_void,
+    call_nonvirtual_double_method_v: *mut std::ffi::c_void,
+    call_nonvirtual_double_method_a: *mut std::ffi::c_void,
+    call_nonvirtual_void_method: *mut std::ffi::c_void,
+    call_nonvirtual_void_method_v: *mut std::ffi::c_void,
+    call_nonvirtual_void_method_a: *mut std::ffi::c_void,
+    get_field_id: *mut std::ffi::c_void,
+    get_object_field: *mut std::ffi::c_void,
+    get_boolean_field: *mut std::ffi::c_void,
+    get_byte_field: *mut std::ffi::c_void,
+    get_char_field: *mut std::ffi::c_void,
+    get_short_field: *mut std::ffi::c_void,
+    get_int_field: *mut std::ffi::c_void,
+    get_long_field: *mut std::ffi::c_void,
+    get_float_field: *mut std::ffi::c_void,
+    get_double_field: *mut std::ffi::c_void,
+    set_object_field: *mut std::ffi::c_void,
+    set_boolean_field: *mut std::ffi::c_void,
+    set_byte_field: *mut std::ffi::c_void,
+    set_char_field: *mut std::ffi::c_void,
+    set_short_field: *mut std::ffi::c_void,
+    set_int_field: *mut std::ffi::c_void,
+    set_long_field: *mut std::ffi::c_void,
+    set_float_field: *mut std::ffi::c_void,
+    set_double_field: *mut std::ffi::c_void,
+    get_static_method_id: *mut std::ffi::c_void,
+    call_static_object_method: *mut std::ffi::c_void,
+    call_static_object_method_v: *mut std::ffi::c_void,
+    call_static_object_method_a: *mut std::ffi::c_void,
+    call_static_boolean_method: *mut std::ffi::c_void,
+    call_static_boolean_method_v: *mut std::ffi::c_void,
+    call_static_boolean_method_a: *mut std::ffi::c_void,
+    call_static_byte_method: *mut std::ffi::c_void,
+    call_static_byte_method_v: *mut std::ffi::c_void,
+    call_static_byte_method_a: *mut std::ffi::c_void,
+    call_static_char_method: *mut std::ffi::c_void,
+    call_static_char_method_v: *mut std::ffi::c_void,
+    call_static_char_method_a: *mut std::ffi::c_void,
+    call_static_short_method: *mut std::ffi::c_void,
+    call_static_short_method_v: *mut std::ffi::c_void,
+    call_static_short_method_a: *mut std::ffi::c_void,
+    call_static_int_method: *mut std::ffi::c_void,
+    call_static_int_method_v: *mut std::ffi::c_void,
+    call_static_int_method_a: *mut std::ffi::c_void,
+    call_static_long_method: *mut std::ffi::c_void,
+    call_static_long_method_v: *mut std::ffi::c_void,
+    call_static_long_method_a: *mut std::ffi::c_void,
+    call_static_float_method: *mut std::ffi::c_void,
+    call_static_float_method_v: *mut std::ffi::c_void,
+    call_static_float_method_a: *mut std::ffi::c_void,
+    call_static_double_method: *mut std::ffi::c_void,
+    call_static_double_method_v: *mut std::ffi::c_void,
+    call_static_double_method_a: *mut std::ffi::c_void,
+    call_static_void_method: *mut std::ffi::c_void,
+    call_static_void_method_v: *mut std::ffi::c_void,
+    call_static_void_method_a: *mut std::ffi::c_void,
+    get_static_field_id: *mut std::ffi::c_void,
+    get_static_object_field: *mut std::ffi::c_void,
+    get_static_boolean_field: *mut std::ffi::c_void,
+    get_static_byte_field: *mut std::ffi::c_void,
+    get_static_char_field: *mut std::ffi::c_void,
+    get_static_short_field: *mut std::ffi::c_void,
+    get_static_int_field: *mut std::ffi::c_void,
+    get_static_long_field: *mut std::ffi::c_void,
+    get_static_float_field: *mut std::ffi::c_void,
+    get_static_double_field: *mut std::ffi::c_void,
+    set_static_object_field: *mut std::ffi::c_void,
+    set_static_boolean_field: *mut std::ffi::c_void,
+    set_static_byte_field: *mut std::ffi::c_void,
+    set_static_char_field: *mut std::ffi::c_void,
+    set_static_short_field: *mut std::ffi::c_void,
+    set_static_int_field: *mut std::ffi::c_void,
+    set_static_long_field: *mut std::ffi::c_void,
+    set_static_float_field: *mut std::ffi::c_void,
+    set_static_double_field: *mut std::ffi::c_void,
+    new_string: *mut std::ffi::c_void,
+    get_string_length: *mut std::ffi::c_void,
+    get_string_chars: *mut std::ffi::c_void,
+    release_string_chars: *mut std::ffi::c_void,
+    new_string_utf: *mut std::ffi::c_void,
+    get_string_utf_length: *mut std::ffi::c_void,
+    get_string_utf_chars: *mut std::ffi::c_void,
+    release_string_utf_chars: *mut std::ffi::c_void,
+    get_array_length: unsafe extern "system" fn(*mut JNIEnv, *mut std::ffi::c_void) -> JSize,
+    new_object_array: *mut std::ffi::c_void,
+    get_object_array_element: *mut std::ffi::c_void,
+    set_object_array_element: *mut std::ffi::c_void,
+    new_boolean_array: *mut std::ffi::c_void,
+    new_byte_array: unsafe extern "system" fn(*mut JNIEnv, JSize) -> *mut std::ffi::c_void,
+    new_char_array: *mut std::ffi::c_void,
+    new_short_array: *mut std::ffi::c_void,
+    new_int_array: *mut std::ffi::c_void,
+    new_long_array: *mut std::ffi::c_void,
+    new_float_array: *mut std::ffi::c_void,
+    new_double_array: *mut std::ffi::c_void,
+    get_boolean_array_elements: *mut std::ffi::c_void,
+    get_byte_array_elements: *mut std::ffi::c_void,
+    get_char_array_elements: *mut std::ffi::c_void,
+    get_short_array_elements: *mut std::ffi::c_void,
+    get_int_array_elements: *mut std::ffi::c_void,
+    get_long_array_elements: *mut std::ffi::c_void,
+    get_float_array_elements:
+        unsafe extern "system" fn(*mut JNIEnv, *mut std::ffi::c_void, *mut JBoolean) -> *mut f32,
+    get_double_array_elements: *mut std::ffi::c_void,
+    release_boolean_array_elements: *mut std::ffi::c_void,
+    release_byte_array_elements: *mut std::ffi::c_void,
+    release_char_array_elements: *mut std::ffi::c_void,
+    release_short_array_elements: *mut std::ffi::c_void,
+    release_int_array_elements: *mut std::ffi::c_void,
+    release_long_array_elements: *mut std::ffi::c_void,
+    release_float_array_elements:
+        unsafe extern "system" fn(*mut JNIEnv, *mut std::ffi::c_void, *mut f32, JInt),
+    release_double_array_elements: *mut std::ffi::c_void,
+    get_boolean_array_region: *mut std::ffi::c_void,
+    get_byte_array_region: *mut std::ffi::c_void,
+    get_char_array_region: *mut std::ffi::c_void,
+    get_short_array_region: *mut std::ffi::c_void,
+    get_int_array_region: *mut std::ffi::c_void,
+    get_long_array_region: *mut std::ffi::c_void,
+    get_float_array_region: *mut std::ffi::c_void,
+    get_double_array_region: *mut std::ffi::c_void,
+    set_boolean_array_region: *mut std::ffi::c_void,
+    set_byte_array_region:
+        unsafe extern "system" fn(*mut JNIEnv, *mut std::ffi::c_void, JSize, JSize, *const i8),
+}
+
+#[repr(C)]
+pub struct JNIEnv {
+    functions: *const JNINativeInterface,
+}
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
@@ -175,6 +397,88 @@ pub unsafe extern "system" fn Java_io_github_lukasvi_hypainter_engine_NativePain
 ) -> JBoolean {
     hyp_document_clear(handle as *mut HyPaintDocument) as JBoolean
 }
+
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_github_lukasvi_hypainter_engine_NativePaintingEngine_nativeAppendStroke(
+    env: *mut JNIEnv,
+    _class: *mut std::ffi::c_void,
+    handle: JLong,
+    samples: *mut std::ffi::c_void,
+) -> JBoolean {
+    let Some(document) = (handle as *mut HyPaintDocument).as_mut() else {
+        return 0;
+    };
+
+    if env.is_null() || samples.is_null() {
+        return 0;
+    }
+
+    let functions = (*env).functions;
+    let len = ((*functions).get_array_length)(env, samples);
+    if len <= 0 || len as usize % JNI_SAMPLE_STRIDE != 0 {
+        return 0;
+    }
+
+    let raw = ((*functions).get_float_array_elements)(env, samples, ptr::null_mut());
+    if raw.is_null() {
+        return 0;
+    }
+
+    let floats = slice::from_raw_parts(raw, len as usize);
+    let mut decoded = Vec::with_capacity(floats.len() / JNI_SAMPLE_STRIDE);
+    for chunk in floats.chunks_exact(JNI_SAMPLE_STRIDE) {
+        decoded.push(HyPaintSample {
+            x: chunk[0],
+            y: chunk[1],
+            pressure: chunk[2],
+            tilt_x: chunk[3],
+            tilt_y: chunk[4],
+            timestamp_ms: chunk[5].max(0.0) as u64,
+        });
+    }
+
+    ((*functions).release_float_array_elements)(env, samples, raw, JNI_ABORT);
+    document.append_stroke(&decoded);
+    1
+}
+
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_github_lukasvi_hypainter_engine_NativePaintingEngine_nativeRenderRgba(
+    env: *mut JNIEnv,
+    _class: *mut std::ffi::c_void,
+    handle: JLong,
+) -> *mut std::ffi::c_void {
+    let Some(document) = (handle as *const HyPaintDocument).as_ref() else {
+        return ptr::null_mut();
+    };
+
+    if env.is_null() {
+        return ptr::null_mut();
+    }
+
+    let bytes = document.render_rgba();
+    if bytes.len() > JSize::MAX as usize {
+        return ptr::null_mut();
+    }
+
+    let functions = (*env).functions;
+    let array = ((*functions).new_byte_array)(env, bytes.len() as JSize);
+    if array.is_null() {
+        return ptr::null_mut();
+    }
+
+    ((*functions).set_byte_array_region)(
+        env,
+        array,
+        0,
+        bytes.len() as JSize,
+        bytes.as_ptr() as *const i8,
+    );
+    array
+}
+
+const JNI_ABORT: JInt = 2;
+const JNI_SAMPLE_STRIDE: usize = 6;
 
 #[cfg(test)]
 mod tests {

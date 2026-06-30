@@ -30,6 +30,12 @@ Android debug build:
 .\gradlew.bat :android:app:assembleDebug
 ```
 
+If the Rust Android target is missing, install it first:
+
+```powershell
+rustup target add aarch64-linux-android
+```
+
 Rust core verification:
 
 ```powershell
@@ -48,3 +54,4 @@ Current bridge status:
 - `KotlinPaintingEngine` keeps the debug app usable while native packaging is not wired.
 - `NativePaintingEngine` defines the Android native method boundary for `hyp_ffi`.
 - `hyp_ffi` exposes the first C ABI/JNI entry points for document lifecycle, clear, stroke submission, and RGBA rendering.
+- Gradle builds `hyp_ffi` for `arm64-v8a` and packages `libhyp_ffi.so` into the debug APK when the Rust Android target is installed.

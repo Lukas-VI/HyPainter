@@ -59,3 +59,24 @@
 - `README.md`、`android/README.md`、`rust/README.md`：更新当前桥接状态与后续 MVP 方向。
 - 当前限制：Rust `.so` 尚未自动构建并打包进 Android APK，native bridge 默认会回落到 Kotlin engine。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，删除 `HyP_ffi` crate 与 Android `engine/` 包，并还原 `MainActivity.kt` 和 README/progress 修改。
+
+## 2026-06-30 - Task: 打通 Rust native 库打包进 APK
+
+### What was done
+- 新增 `scripts/build-rust-android.ps1`，使用 Android NDK clang 将 `hyp_ffi` 构建为 `arm64-v8a` 的 `libhyp_ffi.so`。
+- 将 Android Gradle debug 构建接入 Rust native 构建任务，并把生成的 `.so` 作为 generated `jniLibs` 打包进 APK。
+- 补全 `NativePaintingEngine` 对应的 Rust JNI 入口，使样本数组提交和 RGBA byte array 返回具备 native 实现。
+- 安装并验证 `aarch64-linux-android` Rust target。
+
+### Testing
+- `cd rust; cargo fmt --all -- --check; cargo test`：通过。
+- `.\gradlew.bat :android:app:assembleDebug --stacktrace`：通过，执行 `:android:app:buildRustArm64Debug` 并生成 native 库。
+- 检查 APK 内容确认存在 `lib/arm64-v8a/libhyp_ffi.so`，大小为 `4909976` bytes。
+
+### Notes
+- `scripts/build-rust-android.ps1`：新增 Android Rust native 构建脚本。
+- `android/app/build.gradle.kts`：新增 generated `jniLibs` 路径和 debug 构建前的 Rust native 构建任务。
+- `rust/crates/HyP_ffi/src/lib.rs`：补全 JNI float array 输入和 byte array 输出入口。
+- `README.md`、`android/README.md`、`rust/README.md`：更新 native 打包状态与构建说明。
+- 当前限制：APK 已包含 native 库，但画布可视结果仍使用 Kotlin preview；下一步需要把 native RGBA 渲染结果显示到 Compose 画布。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，删除脚本、还原 Gradle native hook 和 `HyP_ffi` JNI 补充。

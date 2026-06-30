@@ -1,9 +1,11 @@
 package io.github.lukasvi.hypainter
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.MotionEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.core.content.FileProvider
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -177,6 +179,29 @@ private fun CanvasScreen() {
                     }
                 },
                 label = { Text(exportStatus.value ?: "Export") },
+            )
+            Box(modifier = Modifier.size(8.dp))
+            AssistChip(
+                onClick = {
+                    val output = File(context.filesDir, "hypainter-export.png")
+                    if (engine.exportPng(output.absolutePath)) {
+                        val uri = FileProvider.getUriForFile(
+                            context,
+                            "${context.packageName}.fileprovider",
+                            output,
+                        )
+                        val share = Intent(Intent.ACTION_SEND).apply {
+                            type = "image/png"
+                            putExtra(Intent.EXTRA_STREAM, uri)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        context.startActivity(Intent.createChooser(share, "Share HyPainter export"))
+                        exportStatus.value = "Shared"
+                    } else {
+                        exportStatus.value = "Share failed"
+                    }
+                },
+                label = { Text("Share") },
             )
             Box(modifier = Modifier.size(8.dp))
             AssistChip(

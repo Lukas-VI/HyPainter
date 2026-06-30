@@ -59,3 +59,4 @@ Current bridge status:
 - The canvas has MVP controls for clear, undo, brush color, brush size, pressure readout, and PNG export to app-private storage.
 - The app can save and load an app-private draft file containing committed strokes and per-stroke brush settings.
 - The app has MVP layer controls for adding layers, selecting the active layer, toggling visibility, and persisting layer metadata in drafts.
+- MVP status and verification notes are tracked in `docs/mvp-status.md`.

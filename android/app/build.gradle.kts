@@ -63,6 +63,7 @@ tasks.matching { it.name == "mergeDebugJniLibFolders" }.configureEach {
 }
 
 dependencies {
+    implementation(libs.androidx.core)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)

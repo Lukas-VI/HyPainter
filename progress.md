@@ -169,3 +169,27 @@
 - `android/app/src/main/java/io/github/lukasvi/hypainter/MainActivity.kt`：新增横向滚动工具条和图层控制。
 - 当前限制：图层实现是 MVP 语义层，Rust core 仍是单 raster document，通过 Android 侧可见图层重放实现显隐；还没有图层重排、透明度和合并。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 engine、ProjectCodec、MainActivity 和 README/progress 本轮修改。
+
+## 2026-06-30 - Task: 增加分享导出与 MVP 验收记录
+
+### What was done
+- 新增 Android `FileProvider` 配置和 `file_paths.xml`，允许分享 app-private PNG 导出文件。
+- Compose 工具条新增 Share 按钮，导出 PNG 后通过 Android chooser 分享。
+- 增加 `docs/mvp-status.md`，记录当前 MVP 已覆盖能力、验证命令、实现边界和后续非 MVP 工作。
+- README 增加 MVP 状态文档入口。
+
+### Testing
+- `cd rust; cargo fmt --all -- --check; cargo test`：通过。
+- `.\gradlew.bat :android:app:assembleDebug --stacktrace`：通过。
+- 检查 APK 内容确认存在 `lib/arm64-v8a/libhyp_ffi.so` 和 `res/xml/file_paths.xml`。
+- 检查 merged debug manifest 确认包含 `androidx.core.content.FileProvider`、`io.github.lukasvi.hypainter.fileprovider` 和 `@xml/file_paths`。
+
+### Notes
+- `android/app/src/main/AndroidManifest.xml`：新增 FileProvider。
+- `android/app/src/main/res/xml/file_paths.xml`：新增 app-private 文件分享路径。
+- `android/app/src/main/java/io/github/lukasvi/hypainter/MainActivity.kt`：新增 Share 按钮与 Android chooser 调用。
+- `gradle/libs.versions.toml`、`android/app/build.gradle.kts`：新增 AndroidX core 依赖用于 FileProvider。
+- `docs/mvp-status.md`：新增 MVP 状态与验收说明。
+- `README.md`、`progress.md`：更新分享导出与 MVP 状态记录。
+- 当前限制：分享导出已可用，但尚未做真机安装后的手写笔交互验收；UI 仍是 MVP 单行工具条，不是最终平板绘画布局。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，删除 FileProvider 配置、分享按钮、MVP 状态文档并还原 Gradle/README/progress 修改。

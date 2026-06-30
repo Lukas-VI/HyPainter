@@ -1,0 +1,12 @@
+[package]
+name = "hyp_tiles"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+hyp_core = { path = "../HyP_core" }
+
+[lib]
+path = "src/lib.rs"

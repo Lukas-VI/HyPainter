@@ -20,4 +20,24 @@ The project aims to build a modern stylus-first drawing experience with Jetpack 
 
 ## Current Stage
 
-The repository is at the foundation stage. The first implementation milestone is M0: stylus input on Android, batched FFI into Rust, a basic circular brush, and viewport/export verification.
+The repository is moving from foundation into M0. It now has a runnable Android Compose canvas shell and a tested Rust raster core for stylus samples, brush dabs, tile storage, layer compositing, and PNG export.
+
+## Build
+
+Android debug build:
+
+```powershell
+.\gradlew.bat :android:app:assembleDebug
+```
+
+Rust core verification:
+
+```powershell
+cd rust
+cargo fmt --all -- --check
+cargo test
+```
+
+## MVP Direction
+
+The next MVP work is to connect the Android stylus sample stream to the Rust core through the FFI boundary, then add project save/load, layer UI, brush controls, color controls, and export from the Android app.

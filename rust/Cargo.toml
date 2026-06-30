@@ -1,0 +1,14 @@
+[workspace]
+members = [
+    "crates/HyP_core",
+    "crates/HyP_tiles",
+    "crates/HyP_brush",
+    "crates/HyP_compositor",
+    "crates/HyP_export",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/Lukas-VI/HyPainter"

@@ -32,3 +32,42 @@ google-services.json
 
 # Android Profiling
 *.hprof
+
+# Kotlin / Java
+*.class
+*.jar
+*.war
+
+# Rust
+target/
+*.rlib
+*.rmeta
+
+# Native / FFI generated artifacts
+*.so
+*.dylib
+*.dll
+*.def
+*.h
+android/core-ffi/generated/
+rust/target/
+
+# Build and release artifacts
+dist/
+release/
+*.zip
+*.tar
+*.tar.gz
+
+# Local editor and environment files
+.vscode/
+*.swp
+*.swo
+.env
+.env.*
+
+# HyPainter project/runtime files
+*.pdraw
+*.pdoc
+*.hyproj
+*.autosave

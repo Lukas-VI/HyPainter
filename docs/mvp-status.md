@@ -4,7 +4,9 @@
 
 HyPainter has a runnable MVP build for Android debug. It is not a polished alpha, but it now covers the core drawing loop:
 
-- stylus/touch input into a Compose canvas;
+- stylus-priority input into a Compose canvas;
+- two-finger pan, zoom, and rotation with centroid anchoring;
+- screen-to-canvas coordinate mapping that respects viewport pan, zoom, and rotation;
 - pressure-sensitive strokes;
 - Rust native engine packaging and rendering;
 - visible committed strokes from Rust RGBA output;
@@ -40,6 +42,8 @@ Android owns the MVP product model through `PaintingEngine`. When native loading
 Layers are implemented as MVP semantic layers in Android. Rust still renders a single raster document; Android rebuilds that document by replaying visible layer strokes when layer visibility changes or a project is loaded.
 
 The draft project format is app-private text. It saves canvas size, layers, active layer, brush settings, and stylus samples. It is intentionally separate from the future formal `.pdraw` container.
+
+Canvas input is handled through a single MotionEvent router on the painting surface. Stylus and eraser pointers are consumed as drawing input and do not participate in viewport movement; two-finger finger touch drives pan, zoom, and rotation around the two-finger centroid; single-finger touch is left unconsumed for UI and future selection tools.
 
 ## Remaining Non-MVP Work
 

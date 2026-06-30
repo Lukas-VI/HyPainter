@@ -8,7 +8,6 @@ import androidx.activity.compose.setContent
 import androidx.core.content.FileProvider
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -33,13 +32,17 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.input.pointer.pointerInteropFilter
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import io.github.lukasvi.hypainter.engine.EngineSample
 import io.github.lukasvi.hypainter.engine.EngineStroke
 import io.github.lukasvi.hypainter.engine.PaintingEngine
 import io.github.lukasvi.hypainter.engine.createPaintingEngine
 import java.io.File
+import kotlin.math.PI
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.hypot
+import kotlin.math.sin
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -68,30 +71,28 @@ private fun CanvasScreen() {
     val latestPressure = remember { mutableStateOf(0f) }
     val exportStatus = remember { mutableStateOf<String?>(null) }
     val projectStatus = remember { mutableStateOf<String?>(null) }
+    val inputRouter = remember { CanvasInputRouter() }
     val snapshot = remember(version.value) { engine.snapshot() }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF15171A))
-            .pointerInput(Unit) {
-                detectTransformGestures { _, pan, zoom, rotation ->
-                    if (snapshot.activeStroke == null) {
-                        viewport.value = viewport.value.transform(pan, zoom, rotation)
-                    }
-                }
-            }
-            .pointerInteropFilter { event ->
-                handleStylusEvent(
-                    event = event,
-                    viewport = viewport.value,
-                    engine = engine,
-                    onEngineChanged = { version.value++ },
-                    onPressure = { latestPressure.value = it },
-                )
-            },
+            .background(Color(0xFF15171A)),
     ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
+        Canvas(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInteropFilter { event ->
+                    inputRouter.onMotionEvent(
+                        event = event,
+                        viewport = viewport.value,
+                        engine = engine,
+                        onViewportChanged = { viewport.value = it },
+                        onEngineChanged = { version.value++ },
+                        onPressure = { latestPressure.value = it },
+                    )
+                },
+        ) {
             val state = viewport.value
             withTransformCompat(state) {
                 drawCanvasBackground(snapshot.canvasWidth, snapshot.canvasHeight)
@@ -267,52 +268,130 @@ private fun BrushChip(label: String, onClick: () -> Unit) {
     AssistChip(onClick = onClick, label = { Text(label) })
 }
 
-private fun handleStylusEvent(
-    event: MotionEvent,
-    viewport: ViewportState,
-    engine: PaintingEngine,
-    onEngineChanged: () -> Unit,
-    onPressure: (Float) -> Unit,
-): Boolean {
-    val toolType = event.getToolType(event.actionIndex)
-    val isStylus = toolType == MotionEvent.TOOL_TYPE_STYLUS ||
-        toolType == MotionEvent.TOOL_TYPE_ERASER ||
-        toolType == MotionEvent.TOOL_TYPE_UNKNOWN
+private class CanvasInputRouter {
+    private var stylusPointerId: Int? = null
+    private var lastTouchGesture: TouchGestureFrame? = null
 
-    if (!isStylus) {
+    fun onMotionEvent(
+        event: MotionEvent,
+        viewport: ViewportState,
+        engine: PaintingEngine,
+        onViewportChanged: (ViewportState) -> Unit,
+        onEngineChanged: () -> Unit,
+        onPressure: (Float) -> Unit,
+    ): Boolean {
+        if (stylusPointerId != null || event.actionPointerIsStylus()) {
+            return handleStylusEvent(event, viewport, engine, onEngineChanged, onPressure)
+        }
+
+        return handleTouchEvent(event, viewport, onViewportChanged)
+    }
+
+    private fun handleStylusEvent(
+        event: MotionEvent,
+        viewport: ViewportState,
+        engine: PaintingEngine,
+        onEngineChanged: () -> Unit,
+        onPressure: (Float) -> Unit,
+    ): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
+                val pointerIndex = event.actionIndex
+                if (!event.isStylusPointer(pointerIndex)) {
+                    return stylusPointerId != null
+                }
+                stylusPointerId = event.getPointerId(pointerIndex)
+                engine.beginStroke(event.toSample(pointerIndex, viewport, historicalIndex = null))
+                onPressure(event.getPressure(pointerIndex).coerceIn(0f, 1f))
+                onEngineChanged()
+                return true
+            }
+
+            MotionEvent.ACTION_MOVE -> {
+                val pointerIndex = event.findActiveStylusPointerIndex() ?: return true
+                for (historyIndex in 0 until event.historySize) {
+                    engine.appendSample(event.toSample(pointerIndex, viewport, historyIndex))
+                }
+                engine.appendSample(event.toSample(pointerIndex, viewport, historicalIndex = null))
+                onPressure(event.getPressure(pointerIndex).coerceIn(0f, 1f))
+                onEngineChanged()
+                return true
+            }
+
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
+                val activePointerId = stylusPointerId
+                if (activePointerId != null && event.getPointerId(event.actionIndex) == activePointerId) {
+                    engine.endStroke()
+                    stylusPointerId = null
+                    lastTouchGesture = null
+                    onEngineChanged()
+                }
+                return true
+            }
+
+            MotionEvent.ACTION_CANCEL -> {
+                if (stylusPointerId != null) {
+                    engine.endStroke()
+                    stylusPointerId = null
+                    lastTouchGesture = null
+                    onEngineChanged()
+                }
+                return true
+            }
+        }
+
+        return true
+    }
+
+    private fun handleTouchEvent(
+        event: MotionEvent,
+        viewport: ViewportState,
+        onViewportChanged: (ViewportState) -> Unit,
+    ): Boolean {
+        if (!event.allPointersAreFingers()) {
+            lastTouchGesture = null
+            return false
+        }
+
+        when (event.actionMasked) {
+            MotionEvent.ACTION_POINTER_DOWN, MotionEvent.ACTION_MOVE -> {
+                if (event.pointerCount < 2) {
+                    lastTouchGesture = null
+                    return false
+                }
+
+                val next = event.touchGestureFrame()
+                val previous = lastTouchGesture
+                lastTouchGesture = next
+                if (previous != null) {
+                    onViewportChanged(
+                        viewport.transformAround(
+                            previous = previous,
+                            next = next,
+                        ),
+                    )
+                }
+                return true
+            }
+
+            MotionEvent.ACTION_POINTER_UP, MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                lastTouchGesture = null
+                return false
+            }
+        }
+
         return false
     }
 
-    val sample = EngineSample(
-        position = viewport.toCanvas(Offset(event.x, event.y)),
-        pressure = event.pressure.coerceIn(0f, 1f),
-        tiltX = event.getAxisValue(MotionEvent.AXIS_TILT),
-        tiltY = event.getAxisValue(MotionEvent.AXIS_ORIENTATION),
-        timestamp = event.eventTime,
-    )
-    onPressure(sample.pressure)
-
-    when (event.actionMasked) {
-        MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
-            engine.beginStroke(sample)
-            onEngineChanged()
-            return true
+    private fun MotionEvent.findActiveStylusPointerIndex(): Int? {
+        val activePointerId = stylusPointerId ?: return null
+        val pointerIndex = findPointerIndex(activePointerId)
+        if (pointerIndex < 0) {
+            stylusPointerId = null
+            return null
         }
-
-        MotionEvent.ACTION_MOVE -> {
-            engine.appendSample(sample)
-            onEngineChanged()
-            return true
-        }
-
-        MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_POINTER_UP -> {
-            engine.endStroke()
-            onEngineChanged()
-            return true
-        }
+        return pointerIndex
     }
-
-    return true
 }
 
 private fun DrawScope.withTransformCompat(
@@ -321,8 +400,8 @@ private fun DrawScope.withTransformCompat(
 ) {
     withTransform({
         translate(viewport.pan.x, viewport.pan.y)
-        rotate(viewport.rotation)
-        scale(viewport.scale, viewport.scale)
+        rotate(viewport.rotation, pivot = Offset.Zero)
+        scale(viewport.scale, viewport.scale, pivot = Offset.Zero)
     }) {
         block()
     }
@@ -361,15 +440,97 @@ private data class ViewportState(
     val scale: Float = 1f,
     val rotation: Float = 0f,
 ) {
-    fun transform(panDelta: Offset, zoomDelta: Float, rotationDelta: Float): ViewportState {
-        return copy(
-            pan = pan + panDelta,
-            scale = (scale * zoomDelta).coerceIn(0.25f, 8f),
-            rotation = rotation + rotationDelta,
+    fun transformAround(previous: TouchGestureFrame, next: TouchGestureFrame): ViewportState {
+        val canvasAnchor = toCanvas(previous.centroid)
+        val nextScale = (scale * next.distance / previous.distance).coerceIn(0.25f, 8f)
+        val nextRotation = rotation + next.angleDegrees - previous.angleDegrees
+        val desiredAnchor = next.centroid
+        val nextPan = desiredAnchor - rotate(canvasAnchor * nextScale, nextRotation)
+        return ViewportState(
+            pan = nextPan,
+            scale = nextScale,
+            rotation = nextRotation,
         )
     }
 
     fun toCanvas(screen: Offset): Offset {
-        return (screen - pan) / scale
+        return rotate(screen - pan, -rotation) / scale
     }
+}
+
+private data class TouchGestureFrame(
+    val centroid: Offset,
+    val distance: Float,
+    val angleDegrees: Float,
+)
+
+private fun MotionEvent.actionPointerIsStylus(): Boolean {
+    return actionIndex in 0 until pointerCount && isStylusPointer(actionIndex)
+}
+
+private fun MotionEvent.isStylusPointer(pointerIndex: Int): Boolean {
+    val toolType = getToolType(pointerIndex)
+    return toolType == MotionEvent.TOOL_TYPE_STYLUS ||
+        toolType == MotionEvent.TOOL_TYPE_ERASER
+}
+
+private fun MotionEvent.allPointersAreFingers(): Boolean {
+    for (index in 0 until pointerCount) {
+        if (getToolType(index) != MotionEvent.TOOL_TYPE_FINGER) {
+            return false
+        }
+    }
+    return true
+}
+
+private fun MotionEvent.touchGestureFrame(): TouchGestureFrame {
+    val first = Offset(getX(0), getY(0))
+    val second = Offset(getX(1), getY(1))
+    val delta = second - first
+    return TouchGestureFrame(
+        centroid = (first + second) / 2f,
+        distance = hypot(delta.x, delta.y).coerceAtLeast(1f),
+        angleDegrees = (atan2(delta.y, delta.x) * 180f / PI.toFloat()),
+    )
+}
+
+private fun MotionEvent.toSample(
+    pointerIndex: Int,
+    viewport: ViewportState,
+    historicalIndex: Int?,
+): EngineSample {
+    val screenPosition = if (historicalIndex == null) {
+        Offset(getX(pointerIndex), getY(pointerIndex))
+    } else {
+        Offset(getHistoricalX(pointerIndex, historicalIndex), getHistoricalY(pointerIndex, historicalIndex))
+    }
+    return EngineSample(
+        position = viewport.toCanvas(screenPosition),
+        pressure = if (historicalIndex == null) {
+            getPressure(pointerIndex)
+        } else {
+            getHistoricalPressure(pointerIndex, historicalIndex)
+        }.coerceIn(0f, 1f),
+        tiltX = if (historicalIndex == null) {
+            getAxisValue(MotionEvent.AXIS_TILT, pointerIndex)
+        } else {
+            getHistoricalAxisValue(MotionEvent.AXIS_TILT, pointerIndex, historicalIndex)
+        },
+        tiltY = if (historicalIndex == null) {
+            getAxisValue(MotionEvent.AXIS_ORIENTATION, pointerIndex)
+        } else {
+            getHistoricalAxisValue(MotionEvent.AXIS_ORIENTATION, pointerIndex, historicalIndex)
+        },
+        timestamp = if (historicalIndex == null) eventTime else getHistoricalEventTime(historicalIndex),
+    )
+}
+
+private fun rotate(offset: Offset, degrees: Float): Offset {
+    val radians = degrees * PI.toFloat() / 180f
+    val cosValue = cos(radians)
+    val sinValue = sin(radians)
+    return Offset(
+        x = offset.x * cosValue - offset.y * sinValue,
+        y = offset.x * sinValue + offset.y * cosValue,
+    )
 }

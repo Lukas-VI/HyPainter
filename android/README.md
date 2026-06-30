@@ -10,7 +10,8 @@ Current app status:
 
 - Builds as a debug Android application.
 - Shows a full-screen Compose painting surface.
-- Captures stylus-like `MotionEvent` input with pressure.
+- Captures stylus and eraser `MotionEvent` input with pressure and historical samples.
+- Uses a layered canvas input router: stylus input has priority, single-finger touch is reserved for UI/future selection, and two-finger touch transforms the canvas.
 - Routes canvas actions through a `PaintingEngine` abstraction.
 - Supports a Kotlin fallback engine for stroke preview, clear, undo, pan, zoom, and rotation.
 - Defines a `NativePaintingEngine` bridge for future `hyp_ffi` shared-library packaging.
@@ -19,5 +20,6 @@ Current app status:
 - Provides MVP controls for brush color, brush size, clear, undo, pressure readout, and PNG export.
 - Saves and loads an app-private draft project file for committed strokes and brush settings.
 - Provides MVP layer controls: add layer, select active layer, hide/show layer, and persist layer metadata.
+- Maps screen coordinates through viewport pan, zoom, and rotation before samples enter the painting engine.
 
-The next step is adding a user-facing export/share destination and improving the visual layout beyond the current single-row MVP toolbar.
+The next step is validating the input router on a real stylus tablet and improving the visual layout beyond the current single-row MVP toolbar.

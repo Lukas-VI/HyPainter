@@ -193,3 +193,23 @@
 - `README.md`、`progress.md`：更新分享导出与 MVP 状态记录。
 - 当前限制：分享导出已可用，但尚未做真机安装后的手写笔交互验收；UI 仍是 MVP 单行工具条，不是最终平板绘画布局。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，删除 FileProvider 配置、分享按钮、MVP 状态文档并还原 Gradle/README/progress 修改。
+
+## 2026-06-30 - Task: 巩固画布输入分层与坐标映射
+
+### What was done
+- 将画布输入从页面级 `detectTransformGestures` 与 `pointerInteropFilter` 混用，改为画布级单一 `MotionEvent` 路由。
+- 新增笔输入优先级：stylus/eraser 指针开始绘制后会消费后续笔事件，杜绝笔事件参与画布平移/旋转。
+- 双指 finger touch 独立负责画布 pan/zoom/rotation，旋转与缩放锚点固定为双指连线中心。
+- 修正 screen-to-canvas 映射，采样坐标现在会反向应用画布位移、缩放和旋转。
+- 修正 Compose 绘制变换 pivot，画布缩放/旋转围绕文档原点应用，再由输入路由按双指中心计算新的 pan。
+- MOVE 事件补录 `MotionEvent` historical samples，减少高频笔输入时的采样丢失。
+- 更新 README、Android README 与 MVP 状态文档，记录当前输入语义和验证边界。
+
+### Testing
+- `.\gradlew.bat :android:app:assembleDebug`：通过。
+
+### Notes
+- 参考 Android 官方 `MotionEvent` 文档的 pointer/tool type 与 historical sample API，按 `TOOL_TYPE_STYLUS`、`TOOL_TYPE_ERASER`、`TOOL_TYPE_FINGER` 分层。
+- 参考 Jetpack Compose pointer input 文档后，当前选择不用通用 `detectTransformGestures`，而是在画布 surface 上统一处理事件优先级。
+- 当前仍缺真实 Android 平板手写笔长时间绘制验收；下一步应通过 Android Studio/ADB 在真机上观察 Logcat、帧率和输入中断情况。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `MainActivity.kt`、README、android/README、docs/mvp-status.md 和 progress 本轮修改。

@@ -59,4 +59,6 @@ Current bridge status:
 - The canvas has MVP controls for clear, undo, brush color, brush size, pressure readout, and PNG export to app-private storage.
 - The app can save and load an app-private draft file containing committed strokes and per-stroke brush settings.
 - The app has MVP layer controls for adding layers, selecting the active layer, toggling visibility, and persisting layer metadata in drafts.
+- Canvas input is routed by tool type: stylus and eraser strokes have priority, single-finger touches are left for UI/future selection work, and two-finger touch gestures pan, zoom, and rotate around the finger centroid.
+- Screen-to-canvas mapping now accounts for canvas pan, zoom, and rotation so strokes land in the expected document coordinates after viewport changes.
 - MVP status and verification notes are tracked in `docs/mvp-status.md`.

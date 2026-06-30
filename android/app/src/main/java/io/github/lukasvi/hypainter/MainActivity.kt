@@ -21,6 +21,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -32,8 +33,10 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import io.github.lukasvi.hypainter.engine.EngineSample
 import io.github.lukasvi.hypainter.engine.EngineStroke
+import io.github.lukasvi.hypainter.engine.EngineBrush
 import io.github.lukasvi.hypainter.engine.PaintingEngine
 import io.github.lukasvi.hypainter.engine.createPaintingEngine
+import java.io.File
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -55,10 +58,12 @@ private fun HyPainterApp() {
 
 @Composable
 private fun CanvasScreen() {
+    val context = LocalContext.current
     val engine = remember { createPaintingEngine() }
     val version = remember { mutableStateOf(0) }
     val viewport = remember { mutableStateOf(ViewportState()) }
     val latestPressure = remember { mutableStateOf(0f) }
+    val exportStatus = remember { mutableStateOf<String?>(null) }
     val snapshot = remember(version.value) { engine.snapshot() }
 
     Box(
@@ -127,8 +132,56 @@ private fun CanvasScreen() {
                     )
                 },
             )
+            Box(modifier = Modifier.size(8.dp))
+            BrushChip("Black") {
+                engine.setBrush(snapshot.brush.copy(colorArgb = 0xff000000.toInt()))
+                version.value++
+            }
+            Box(modifier = Modifier.size(8.dp))
+            BrushChip("Red") {
+                engine.setBrush(snapshot.brush.copy(colorArgb = 0xffd72638.toInt()))
+                version.value++
+            }
+            Box(modifier = Modifier.size(8.dp))
+            BrushChip("Blue") {
+                engine.setBrush(snapshot.brush.copy(colorArgb = 0xff2563eb.toInt()))
+                version.value++
+            }
+            Box(modifier = Modifier.size(8.dp))
+            AssistChip(
+                onClick = {
+                    engine.setBrush(snapshot.brush.copy(radiusPx = (snapshot.brush.radiusPx - 2f).coerceAtLeast(2f)))
+                    version.value++
+                },
+                label = { Text("-") },
+            )
+            Box(modifier = Modifier.size(8.dp))
+            AssistChip(
+                onClick = {
+                    engine.setBrush(snapshot.brush.copy(radiusPx = (snapshot.brush.radiusPx + 2f).coerceAtMost(48f)))
+                    version.value++
+                },
+                label = { Text("Size ${snapshot.brush.radiusPx.toInt()}") },
+            )
+            Box(modifier = Modifier.size(8.dp))
+            AssistChip(
+                onClick = {
+                    val output = File(context.filesDir, "hypainter-export.png")
+                    exportStatus.value = if (engine.exportPng(output.absolutePath)) {
+                        "Exported"
+                    } else {
+                        "Export failed"
+                    }
+                },
+                label = { Text(exportStatus.value ?: "Export") },
+            )
         }
     }
+}
+
+@Composable
+private fun BrushChip(label: String, onClick: () -> Unit) {
+    AssistChip(onClick = onClick, label = { Text(label) })
 }
 
 private fun handleStylusEvent(
@@ -202,18 +255,18 @@ private fun DrawScope.drawCanvasBackground(width: Int, height: Int) {
 private fun DrawScope.drawStroke(stroke: EngineStroke) {
     stroke.points.zipWithNext().forEach { (from, to) ->
         drawLine(
-            color = Color.Black.copy(alpha = to.pressure.coerceIn(0.1f, 1f)),
+            color = Color(stroke.brush.colorArgb).copy(alpha = to.pressure.coerceIn(0.1f, 1f)),
             start = from.position,
             end = to.position,
-            strokeWidth = 4f + to.pressure * 16f,
+            strokeWidth = stroke.brush.radiusPx * 2f * to.pressure.coerceIn(0.1f, 1f),
             cap = StrokeCap.Round,
         )
     }
 
     stroke.points.singleOrNull()?.let { point ->
         drawCircle(
-            color = Color.Black.copy(alpha = point.pressure.coerceIn(0.1f, 1f)),
-            radius = 4f + point.pressure * 16f,
+            color = Color(stroke.brush.colorArgb).copy(alpha = point.pressure.coerceIn(0.1f, 1f)),
+            radius = stroke.brush.radiusPx * point.pressure.coerceIn(0.1f, 1f),
             center = point.position,
             style = Stroke(width = 1f),
         )

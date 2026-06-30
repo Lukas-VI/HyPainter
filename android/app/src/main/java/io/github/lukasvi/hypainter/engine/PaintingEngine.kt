@@ -16,6 +16,10 @@ interface PaintingEngine {
 
     fun clear()
 
+    fun setBrush(brush: EngineBrush)
+
+    fun exportPng(path: String): Boolean
+
     fun snapshot(): EngineSnapshot
 }
 
@@ -29,11 +33,18 @@ data class EngineSample(
 
 data class EngineStroke(
     val points: List<EngineSample>,
+    val brush: EngineBrush,
+)
+
+data class EngineBrush(
+    val colorArgb: Int,
+    val radiusPx: Float,
 )
 
 data class EngineSnapshot(
     val canvasWidth: Int,
     val canvasHeight: Int,
+    val brush: EngineBrush,
     val committedStrokes: List<EngineStroke>,
     val activeStroke: EngineStroke?,
     val renderedImage: ImageBitmap? = null,

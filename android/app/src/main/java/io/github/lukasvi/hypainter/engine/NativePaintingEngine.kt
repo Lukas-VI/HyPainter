@@ -1,8 +1,11 @@
 package io.github.lukasvi.hypainter.engine
 
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color as AndroidColor
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import java.io.FileOutputStream
 
 class NativePaintingEngine private constructor(
     private val handle: Long,
@@ -13,6 +16,8 @@ class NativePaintingEngine private constructor(
 
     private val fallbackPreview = KotlinPaintingEngine(canvasWidth, canvasHeight)
     private var renderedImage: ImageBitmap? = null
+    private var renderedBitmap: Bitmap? = null
+    private var brush = EngineBrush(colorArgb = AndroidColor.BLACK, radiusPx = 8f)
 
     override fun beginStroke(sample: EngineSample) {
         fallbackPreview.beginStroke(sample)
@@ -49,6 +54,30 @@ class NativePaintingEngine private constructor(
         nativeClear(handle)
         fallbackPreview.clear()
         renderedImage = null
+        renderedBitmap = null
+    }
+
+    override fun setBrush(brush: EngineBrush) {
+        this.brush = brush
+        fallbackPreview.setBrush(brush)
+        nativeSetBrush(
+            handle = handle,
+            radiusPx = brush.radiusPx,
+            r = (brush.colorArgb shr 16) and 0xff,
+            g = (brush.colorArgb shr 8) and 0xff,
+            b = brush.colorArgb and 0xff,
+            a = (brush.colorArgb ushr 24) and 0xff,
+        )
+    }
+
+    override fun exportPng(path: String): Boolean {
+        return runCatching {
+            val bitmap = renderedBitmap ?: Bitmap.createBitmap(canvasWidth, canvasHeight, Bitmap.Config.ARGB_8888)
+                .also { Canvas(it).drawColor(AndroidColor.WHITE) }
+            FileOutputStream(path).use { output ->
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)
+            }
+        }.getOrDefault(false)
     }
 
     override fun snapshot(): EngineSnapshot {
@@ -56,6 +85,7 @@ class NativePaintingEngine private constructor(
         return EngineSnapshot(
             canvasWidth = canvasWidth,
             canvasHeight = canvasHeight,
+            brush = brush,
             committedStrokes = emptyList(),
             activeStroke = preview.activeStroke,
             renderedImage = renderedImage,
@@ -68,7 +98,8 @@ class NativePaintingEngine private constructor(
     }
 
     private fun refreshRenderedImage() {
-        renderedImage = rgbaToImageBitmap(nativeRenderRgba(handle), canvasWidth, canvasHeight)
+        renderedBitmap = rgbaToBitmap(nativeRenderRgba(handle), canvasWidth, canvasHeight)
+        renderedImage = renderedBitmap?.asImageBitmap()
     }
 
     protected fun finalize() {
@@ -118,9 +149,19 @@ class NativePaintingEngine private constructor(
         private external fun nativeUndo(handle: Long): Boolean
 
         @JvmStatic
+        private external fun nativeSetBrush(
+            handle: Long,
+            radiusPx: Float,
+            r: Int,
+            g: Int,
+            b: Int,
+            a: Int,
+        ): Boolean
+
+        @JvmStatic
         private external fun nativeRenderRgba(handle: Long): ByteArray
 
-        private fun rgbaToImageBitmap(bytes: ByteArray, width: Int, height: Int): ImageBitmap? {
+        private fun rgbaToBitmap(bytes: ByteArray, width: Int, height: Int): Bitmap? {
             val expectedLength = width * height * 4
             if (bytes.size != expectedLength) {
                 return null
@@ -137,9 +178,7 @@ class NativePaintingEngine private constructor(
                 source += 4
             }
 
-            return Bitmap
-                .createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888)
-                .asImageBitmap()
+            return Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888)
         }
     }
 }

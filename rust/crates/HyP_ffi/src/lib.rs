@@ -249,11 +249,17 @@ pub struct HyPaintBuffer {
     pub len: usize,
 }
 
+#[derive(Clone, Debug)]
+struct StoredStroke {
+    brush: BrushSettings,
+    samples: Vec<HyPaintSample>,
+}
+
 #[derive(Debug)]
 pub struct HyPaintDocument {
     canvas_size: CanvasSize,
     layers: Vec<RasterLayer>,
-    strokes: Vec<Vec<HyPaintSample>>,
+    strokes: Vec<StoredStroke>,
     brush: BrushSettings,
 }
 
@@ -273,8 +279,20 @@ impl HyPaintDocument {
             return;
         }
 
-        self.strokes.push(samples.to_vec());
-        self.rasterize_stroke(samples);
+        let stored = StoredStroke {
+            brush: self.brush,
+            samples: samples.to_vec(),
+        };
+        self.rasterize_stroke(&stored);
+        self.strokes.push(stored);
+    }
+
+    pub fn set_brush(&mut self, radius_px: f32, color: Rgba8) {
+        self.brush = BrushSettings {
+            radius_px: radius_px.max(0.5),
+            color,
+            ..self.brush
+        };
     }
 
     pub fn clear(&mut self) {
@@ -302,9 +320,9 @@ impl HyPaintDocument {
         self.layers = vec![RasterLayer::new(1, "Ink", self.canvas_size)];
     }
 
-    fn rasterize_stroke(&mut self, samples: &[HyPaintSample]) {
+    fn rasterize_stroke(&mut self, stored: &StoredStroke) {
         let mut stroke = Stroke::new();
-        stroke.append(samples.iter().map(|sample| StylusSample {
+        stroke.append(stored.samples.iter().map(|sample| StylusSample {
             position: hyp_core::Point::new(sample.x, sample.y),
             pressure: sample.pressure,
             tilt_x: sample.tilt_x,
@@ -313,7 +331,7 @@ impl HyPaintDocument {
         }));
 
         if let Some(layer) = self.layers.last_mut() {
-            stroke.rasterize(&mut layer.tiles, self.brush);
+            stroke.rasterize(&mut layer.tiles, stored.brush);
         }
     }
 }
@@ -350,6 +368,23 @@ pub unsafe extern "C" fn hyp_document_append_stroke(
 
     let samples = slice::from_raw_parts(samples, sample_count);
     document.append_stroke(samples);
+    true
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn hyp_document_set_brush(
+    document: *mut HyPaintDocument,
+    radius_px: f32,
+    r: u8,
+    g: u8,
+    b: u8,
+    a: u8,
+) -> bool {
+    let Some(document) = document.as_mut() else {
+        return false;
+    };
+
+    document.set_brush(radius_px, Rgba8::new(r, g, b, a));
     true
 }
 
@@ -438,6 +473,27 @@ pub unsafe extern "system" fn Java_io_github_lukasvi_hypainter_engine_NativePain
     handle: JLong,
 ) -> JBoolean {
     hyp_document_undo(handle as *mut HyPaintDocument) as JBoolean
+}
+
+#[no_mangle]
+pub unsafe extern "system" fn Java_io_github_lukasvi_hypainter_engine_NativePaintingEngine_nativeSetBrush(
+    _env: *mut std::ffi::c_void,
+    _class: *mut std::ffi::c_void,
+    handle: JLong,
+    radius_px: f32,
+    r: JInt,
+    g: JInt,
+    b: JInt,
+    a: JInt,
+) -> JBoolean {
+    hyp_document_set_brush(
+        handle as *mut HyPaintDocument,
+        radius_px,
+        r.clamp(0, 255) as u8,
+        g.clamp(0, 255) as u8,
+        b.clamp(0, 255) as u8,
+        a.clamp(0, 255) as u8,
+    ) as JBoolean
 }
 
 #[no_mangle]

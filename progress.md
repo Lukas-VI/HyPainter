@@ -103,3 +103,26 @@
 - `README.md`、`android/README.md`、`rust/README.md`：更新 native render 已进入 Compose 画布的状态。
 - 当前限制：native render 仍是全画布 RGBA 刷新，后续需要 tile/dirty rect 局部刷新；MVP 还缺图层 UI、颜色/笔刷控制、保存加载和导出入口。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 Android engine/MainActivity 和 `HyP_ffi` 本轮修改。
+
+## 2026-06-30 - Task: 增加 MVP 笔刷控制与 PNG 导出
+
+### What was done
+- Android `PaintingEngine` 新增笔刷设置和 PNG 导出接口，native 与 Kotlin fallback 均实现。
+- Compose 画布新增基础色彩按钮、笔刷尺寸调整、压力读数和 Export 按钮。
+- Rust `hyp_ffi` 新增 `nativeSetBrush`，支持将颜色和半径传入 Rust 绘画核心。
+- Rust 文档模型改为每条笔画保存提交时的笔刷参数，确保改色或改尺寸后 undo/replay 不会改变旧笔画外观。
+- PNG 导出会把当前画布写入应用私有目录 `hypainter-export.png`，作为 MVP 导出闭环的第一步。
+
+### Testing
+- `cd rust; cargo fmt --all -- --check; cargo test`：通过。
+- `.\gradlew.bat :android:app:assembleDebug --stacktrace`：通过。
+- 检查 APK 内容确认存在 `lib/arm64-v8a/libhyp_ffi.so`，大小为 `4993024` bytes。
+- 使用 NDK `llvm-nm` 确认 `.so` 导出 `nativeCreate`、`nativeAppendStroke`、`nativeUndo`、`nativeSetBrush`、`nativeRenderRgba` JNI 符号。
+
+### Notes
+- `android/app/src/main/java/io/github/lukasvi/hypainter/MainActivity.kt`：新增颜色、尺寸和导出控制，并按笔刷样式绘制 preview。
+- `android/app/src/main/java/io/github/lukasvi/hypainter/engine/**`：新增 `EngineBrush`、笔刷设置、PNG 导出实现。
+- `rust/crates/HyP_ffi/src/lib.rs`：新增每笔画笔刷存储、brush setter 和 JNI `nativeSetBrush`。
+- `README.md`、`android/README.md`、`rust/README.md`：更新 MVP 控制和导出状态。
+- 当前限制：导出目前写入 app-private 文件，尚未接 Android 分享面板或系统文件选择器；仍缺图层 UI 和项目保存加载。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 Android UI/engine 和 `HyP_ffi` 本轮修改。

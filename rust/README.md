@@ -11,6 +11,7 @@ Current implemented core:
 - `hyp_brush`: pressure-sensitive stroke rasterization into tiles.
 - `hyp_compositor`: visible layer compositing into RGBA pixels.
 - `hyp_export`: dependency-free PNG export and raw RGBA export helpers.
+- `hyp_ffi`: C ABI/JNI-facing document lifecycle, stroke submission, clear, and RGBA render boundary.
 
 Verify with:
 

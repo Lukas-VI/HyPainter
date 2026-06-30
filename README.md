@@ -41,3 +41,10 @@ cargo test
 ## MVP Direction
 
 The next MVP work is to connect the Android stylus sample stream to the Rust core through the FFI boundary, then add project save/load, layer UI, brush controls, color controls, and export from the Android app.
+
+Current bridge status:
+
+- Android UI now talks to a `PaintingEngine` abstraction instead of owning strokes directly.
+- `KotlinPaintingEngine` keeps the debug app usable while native packaging is not wired.
+- `NativePaintingEngine` defines the Android native method boundary for `hyp_ffi`.
+- `hyp_ffi` exposes the first C ABI/JNI entry points for document lifecycle, clear, stroke submission, and RGBA rendering.

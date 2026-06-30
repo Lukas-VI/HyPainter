@@ -17,7 +17,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -30,6 +29,10 @@ import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
+import io.github.lukasvi.hypainter.engine.EngineSample
+import io.github.lukasvi.hypainter.engine.EngineStroke
+import io.github.lukasvi.hypainter.engine.PaintingEngine
+import io.github.lukasvi.hypainter.engine.createPaintingEngine
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -51,10 +54,11 @@ private fun HyPainterApp() {
 
 @Composable
 private fun CanvasScreen() {
-    val strokes = remember { mutableStateListOf<StrokeModel>() }
-    val activeStroke = remember { mutableStateOf<StrokeModel?>(null) }
+    val engine = remember { createPaintingEngine() }
+    val version = remember { mutableStateOf(0) }
     val viewport = remember { mutableStateOf(ViewportState()) }
     val latestPressure = remember { mutableStateOf(0f) }
+    val snapshot = remember(version.value) { engine.snapshot() }
 
     Box(
         modifier = Modifier
@@ -62,7 +66,7 @@ private fun CanvasScreen() {
             .background(Color(0xFF15171A))
             .pointerInput(Unit) {
                 detectTransformGestures { _, pan, zoom, rotation ->
-                    if (activeStroke.value == null) {
+                    if (snapshot.activeStroke == null) {
                         viewport.value = viewport.value.transform(pan, zoom, rotation)
                     }
                 }
@@ -71,9 +75,8 @@ private fun CanvasScreen() {
                 handleStylusEvent(
                     event = event,
                     viewport = viewport.value,
-                    activeStroke = activeStroke.value,
-                    onActiveStrokeChange = { activeStroke.value = it },
-                    onStrokeCommitted = { strokes.add(it) },
+                    engine = engine,
+                    onEngineChanged = { version.value++ },
                     onPressure = { latestPressure.value = it },
                 )
             },
@@ -81,10 +84,10 @@ private fun CanvasScreen() {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val state = viewport.value
             withTransformCompat(state) {
-                strokes.forEach { stroke ->
+                snapshot.committedStrokes.forEach { stroke ->
                     drawStroke(stroke)
                 }
-                activeStroke.value?.let { drawStroke(it) }
+                snapshot.activeStroke?.let { drawStroke(it) }
             }
         }
 
@@ -94,22 +97,30 @@ private fun CanvasScreen() {
                 .padding(16.dp),
         ) {
             AssistChip(
-                onClick = { strokes.clear() },
+                onClick = {
+                    engine.clear()
+                    version.value++
+                },
                 label = { Text("Clear") },
             )
             Box(modifier = Modifier.size(8.dp))
             AssistChip(
                 onClick = {
-                    if (strokes.isNotEmpty()) {
-                        strokes.removeAt(strokes.lastIndex)
-                    }
+                    engine.undo()
+                    version.value++
                 },
                 label = { Text("Undo") },
             )
             Box(modifier = Modifier.size(8.dp))
             AssistChip(
                 onClick = {},
-                label = { Text("Pressure ${"%.2f".format(latestPressure.value)}") },
+                label = {
+                    Text(
+                        "${if (engine.nativeBacked) "Native" else "Kotlin"} · Pressure ${
+                            "%.2f".format(latestPressure.value)
+                        }",
+                    )
+                },
             )
         }
     }
@@ -118,9 +129,8 @@ private fun CanvasScreen() {
 private fun handleStylusEvent(
     event: MotionEvent,
     viewport: ViewportState,
-    activeStroke: StrokeModel?,
-    onActiveStrokeChange: (StrokeModel?) -> Unit,
-    onStrokeCommitted: (StrokeModel) -> Unit,
+    engine: PaintingEngine,
+    onEngineChanged: () -> Unit,
     onPressure: (Float) -> Unit,
 ): Boolean {
     val toolType = event.getToolType(event.actionIndex)
@@ -132,27 +142,31 @@ private fun handleStylusEvent(
         return false
     }
 
-    val sample = StylusSample(
+    val sample = EngineSample(
         position = viewport.toCanvas(Offset(event.x, event.y)),
         pressure = event.pressure.coerceIn(0f, 1f),
+        tiltX = event.getAxisValue(MotionEvent.AXIS_TILT),
+        tiltY = event.getAxisValue(MotionEvent.AXIS_ORIENTATION),
         timestamp = event.eventTime,
     )
     onPressure(sample.pressure)
 
     when (event.actionMasked) {
         MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
-            onActiveStrokeChange(StrokeModel(points = mutableListOf(sample)))
+            engine.beginStroke(sample)
+            onEngineChanged()
             return true
         }
 
         MotionEvent.ACTION_MOVE -> {
-            activeStroke?.points?.add(sample)
+            engine.appendSample(sample)
+            onEngineChanged()
             return true
         }
 
         MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_POINTER_UP -> {
-            activeStroke?.let(onStrokeCommitted)
-            onActiveStrokeChange(null)
+            engine.endStroke()
+            onEngineChanged()
             return true
         }
     }
@@ -173,7 +187,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.withTransformCompat
     }
 }
 
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawStroke(stroke: StrokeModel) {
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawStroke(stroke: EngineStroke) {
     stroke.points.zipWithNext().forEach { (from, to) ->
         drawLine(
             color = Color.Black.copy(alpha = to.pressure.coerceIn(0.1f, 1f)),
@@ -211,13 +225,3 @@ private data class ViewportState(
         return (screen - pan) / scale
     }
 }
-
-private data class StrokeModel(
-    val points: MutableList<StylusSample>,
-)
-
-private data class StylusSample(
-    val position: Offset,
-    val pressure: Float,
-    val timestamp: Long,
-)

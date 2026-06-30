@@ -33,6 +33,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "hyp_ffi"
+version = "0.1.0"
+dependencies = [
+ "hyp_brush",
+ "hyp_compositor",
+ "hyp_core",
+ "hyp_export",
+]
+
+[[package]]
 name = "hyp_tiles"
 version = "0.1.0"
 dependencies = [

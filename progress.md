@@ -39,3 +39,23 @@
 - `rust/Cargo.toml`、`rust/Cargo.lock`、`rust/crates/**`：新增 Rust workspace 与核心绘画模块实现。
 - `README.md`、`android/README.md`、`rust/README.md`：补充当前可构建状态、验证命令和后续 MVP 方向。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，删除本轮新增的 Gradle、Android 源码和 Rust 源码文件，并还原 README/progress 修改。
+
+## 2026-06-30 - Task: 建立 Android 到 Rust 的引擎边界
+
+### What was done
+- 新增 `hyp_ffi` Rust crate，纳入 workspace，提供文档创建、释放、清空、笔画提交、RGBA 渲染和 buffer 释放的 C ABI 起点。
+- 为 `hyp_ffi` 补充基础 JNI 符号，使 Android native bridge 与 Rust 文档生命周期、清空入口开始对齐。
+- 将 Android 画布状态从 `MainActivity` 拆到 `PaintingEngine` 抽象，新增 Kotlin fallback engine 与 native engine 桥接类。
+- 让 Compose 画布通过 engine snapshot 绘制，保留当前可用的压感笔迹、清空、撤销、平移、缩放和旋转体验。
+
+### Testing
+- `cd rust; cargo fmt --all -- --check; cargo test`：通过。
+- `.\gradlew.bat :android:app:assembleDebug --stacktrace`：通过。
+
+### Notes
+- `rust/Cargo.toml`、`rust/crates/HyP_ffi/**`：新增 FFI crate、C ABI、部分 JNI 生命周期入口和测试。
+- `android/app/src/main/java/io/github/lukasvi/hypainter/engine/**`：新增绘画引擎抽象、Kotlin fallback 和 native bridge。
+- `android/app/src/main/java/io/github/lukasvi/hypainter/MainActivity.kt`：改为通过 `PaintingEngine` 管理笔画状态。
+- `README.md`、`android/README.md`、`rust/README.md`：更新当前桥接状态与后续 MVP 方向。
+- 当前限制：Rust `.so` 尚未自动构建并打包进 Android APK，native bridge 默认会回落到 Kotlin engine。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，删除 `HyP_ffi` crate 与 Android `engine/` 包，并还原 `MainActivity.kt` 和 README/progress 修改。

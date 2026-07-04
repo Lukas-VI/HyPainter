@@ -61,6 +61,10 @@ internal class CanvasInputSession {
         next: TouchGestureFrame,
         onViewportChanged: (ViewportState) -> Unit,
     ): Boolean {
+        if (!fingerStreamActive) {
+            lastTouchGesture = null
+            return false
+        }
         val previous = lastTouchGesture
         lastTouchGesture = next
         if (previous != null) {

@@ -86,12 +86,56 @@ class CanvasInputSessionTest {
         val anchoredCanvasPoint = viewport.toCanvas(previous.centroid)
         var transformed: ViewportState? = null
 
+        assertTrue(session.beginFingerStream())
         assertTrue(session.updateTwoFingerTouch(viewport, previous) { transformed = it })
         assertNull(transformed)
         assertTrue(session.updateTwoFingerTouch(viewport, next) { transformed = it })
 
         val nextViewport = checkNotNull(transformed)
         assertOffsetEquals(next.centroid, nextViewport.toScreen(anchoredCanvasPoint))
+    }
+
+    @Test
+    fun twoFingerTouchIsIgnoredBeforeFingerStreamBegins() {
+        val session = CanvasInputSession()
+        var viewportChanges = 0
+
+        assertFalse(
+            session.updateTwoFingerTouch(
+                viewport = ViewportState(),
+                next = TouchGestureFrame(centroid = Offset(100f, 100f), distance = 80f, angleDegrees = 0f),
+                onViewportChanged = { viewportChanges++ },
+            ),
+        )
+
+        assertEquals(0, viewportChanges)
+    }
+
+    @Test
+    fun stylusPriorityBlocksResidualTwoFingerTouchUntilFreshFingerDown() {
+        val session = CanvasInputSession()
+        var viewportChanges = 0
+
+        assertTrue(session.beginFingerStream())
+        assertTrue(
+            session.updateTwoFingerTouch(
+                viewport = ViewportState(),
+                next = TouchGestureFrame(centroid = Offset(100f, 100f), distance = 80f, angleDegrees = 0f),
+                onViewportChanged = { viewportChanges++ },
+            ),
+        )
+        session.beginStylus(pointerId = 3)
+        assertTrue(session.endStylusIfActive(pointerId = 3))
+
+        assertFalse(
+            session.updateTwoFingerTouch(
+                viewport = ViewportState(),
+                next = TouchGestureFrame(centroid = Offset(160f, 120f), distance = 100f, angleDegrees = 30f),
+                onViewportChanged = { viewportChanges++ },
+            ),
+        )
+
+        assertEquals(0, viewportChanges)
     }
 
     private fun assertOffsetEquals(expected: Offset, actual: Offset) {

@@ -697,3 +697,17 @@
 - 这个漏洞会在“按压扫进/扫出 UI、DOWN 被消费，但 MOVE 继续到画布”的场景里放大，表现可能是首段笔画丢失或恢复后输入状态与 engine stroke 状态不一致。
 - 当前项目没有 Robolectric，未新增 `MotionEvent` 级路由单测；后续如果要继续压实输入链路，建议加一个轻量 Android/Robolectric 测试层专门覆盖 ACTION_DOWN/MOVE/UP/CANCEL 序列。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `CanvasInputRouter.kt` 和 progress 本轮修改。
+
+## 2026-07-05 - Task: 阻止 stylus 后残留双指触摸接管画布
+
+### What was done
+- `CanvasInputSession.updateTwoFingerTouch` 现在要求已有有效 finger stream；没有 fresh `ACTION_DOWN -> beginFingerStream` 的双指 MOVE/POINTER_DOWN 不再启动平移/缩放/旋转。
+- 修正双指旋转单测，让它显式模拟真实输入顺序：先开始 finger stream，再建立双指 gesture frame。
+- 新增测试覆盖 stray two-finger touch 被忽略，以及 stylus 抢占并释放后，残留手指 MOVE 不会直接接管画布。
+
+### Testing
+- `.\gradlew.bat :android:app:testDebugUnitTest`：通过。
+
+### Notes
+- 这个修复面向“笔最高优先级”的底层边界：stylus drawing 期间被清掉的手指流，不能在 stylus 抬起后不经新的 down 事件自动恢复成画布变换。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `CanvasInputSession.kt`、`CanvasInputSessionTest.kt` 和 progress 本轮修改。

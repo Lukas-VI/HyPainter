@@ -48,6 +48,7 @@ Canvas input is handled through a single MotionEvent router on the painting surf
 Debug builds include a `Debug` toolbar chip that opens a low-friction input overlay. When that chip is enabled, the same router writes throttled Logcat lines under `HyPainterInput`, which can be watched with `adb logcat -s HyPainterInput` while testing long stylus strokes and two-finger transforms. With the chip disabled, overlay state updates and input logs stay off to avoid diagnostic overhead during normal drawing.
 
 Real-device stylus and touch verification is tracked in `docs/device-input-test-plan.md`.
+Android Studio debugging notes are tracked in `docs/android-studio-debugging.md`.
 
 ## Remaining Non-MVP Work
 

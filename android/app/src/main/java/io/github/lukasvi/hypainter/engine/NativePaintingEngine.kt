@@ -17,6 +17,7 @@ class NativePaintingEngine private constructor(
     private val fallbackPreview = KotlinPaintingEngine(canvasWidth, canvasHeight)
     private var renderedImage: ImageBitmap? = null
     private var renderedBitmap: Bitmap? = null
+    private var renderedBitmapDirty = false
     private var brush = EngineBrush(colorArgb = AndroidColor.BLACK, radiusPx = 8f)
     private val committedStrokes = mutableListOf<EngineStroke>()
     private val layers = mutableListOf(EngineLayer(id = 1L, name = "Layer 1", visible = true))
@@ -47,7 +48,7 @@ class NativePaintingEngine private constructor(
         nativeAppendStroke(handle, samples)
         committedStrokes.add(committedStroke)
         fallbackPreview.clear()
-        refreshRenderedImage()
+        markRenderedBitmapDirty()
     }
 
     override fun undo() {
@@ -55,7 +56,7 @@ class NativePaintingEngine private constructor(
             if (committedStrokes.isNotEmpty()) {
                 committedStrokes.removeAt(committedStrokes.lastIndex)
             }
-            refreshRenderedImage()
+            markRenderedBitmapDirty()
         }
     }
 
@@ -69,6 +70,7 @@ class NativePaintingEngine private constructor(
         nextLayerId = 2L
         renderedImage = null
         renderedBitmap = null
+        renderedBitmapDirty = false
     }
 
     override fun addLayer() {
@@ -107,7 +109,7 @@ class NativePaintingEngine private constructor(
 
     override fun exportPng(path: String): Boolean {
         return runCatching {
-            val bitmap = renderedBitmap ?: Bitmap.createBitmap(canvasWidth, canvasHeight, Bitmap.Config.ARGB_8888)
+            val bitmap = ensureRenderedBitmap() ?: Bitmap.createBitmap(canvasWidth, canvasHeight, Bitmap.Config.ARGB_8888)
                 .also { Canvas(it).drawColor(AndroidColor.WHITE) }
             FileOutputStream(path).use { output ->
                 bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)
@@ -155,6 +157,20 @@ class NativePaintingEngine private constructor(
     private fun refreshRenderedImage() {
         renderedBitmap = rgbaToBitmap(nativeRenderRgba(handle), canvasWidth, canvasHeight)
         renderedImage = renderedBitmap?.asImageBitmap()
+        renderedBitmapDirty = false
+    }
+
+    private fun ensureRenderedBitmap(): Bitmap? {
+        if (renderedBitmap == null || renderedBitmapDirty) {
+            refreshRenderedImage()
+        }
+        return renderedBitmap
+    }
+
+    private fun markRenderedBitmapDirty() {
+        renderedImage = null
+        renderedBitmap = null
+        renderedBitmapDirty = true
     }
 
     private fun rebuildNativeDocument() {
@@ -167,7 +183,7 @@ class NativePaintingEngine private constructor(
                 appendNativeStroke(stroke)
             }
         setBrush(currentBrush)
-        refreshRenderedImage()
+        markRenderedBitmapDirty()
     }
 
     private fun appendNativeStroke(stroke: EngineStroke): Boolean {

@@ -114,15 +114,16 @@ private fun CanvasScreen() {
                 },
         ) {
             val state = viewport.value
+            val visibleLayerIds = snapshot.layers.filter { it.visible }.map { it.id }.toSet()
             withTransformCompat(state) {
                 drawCanvasBackground(snapshot.canvasWidth, snapshot.canvasHeight)
                 snapshot.renderedImage?.let { image ->
                     drawImage(image)
                 }
-                snapshot.committedStrokes.forEach { stroke ->
+                snapshot.committedStrokes.filter { it.layerId in visibleLayerIds }.forEach { stroke ->
                     drawStroke(stroke)
                 }
-                snapshot.activeStroke?.let { drawStroke(it) }
+                snapshot.activeStroke?.takeIf { it.layerId in visibleLayerIds }?.let { drawStroke(it) }
             }
         }
 

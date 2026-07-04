@@ -411,3 +411,21 @@
 ### Notes
 - 这份清单用于补齐当前自动化测试无法证明的部分：厂商手写笔事件、掌触序列、真实触控采样率和实际 UI 卡顿。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，删除 `docs/device-input-test-plan.md` 并还原 android/README、docs/mvp-status.md 和 progress 本轮修改。
+
+## 2026-07-05 - Task: 将 native 全量 bitmap 渲染移出输入路径
+
+### What was done
+- `NativePaintingEngine.endStroke()` 不再在抬笔时执行 `nativeRenderRgba()`、RGBA 转 Bitmap 和 ImageBitmap 创建。
+- undo、图层显隐和 native document rebuild 只标记 rendered bitmap dirty，不立刻生成大图。
+- `exportPng()` 按需生成 native bitmap，GC-heavy 的全量渲染移到导出/分享路径。
+- Compose 画布按 visible layer 过滤 committed/active vector strokes，保证 rendered image 延迟生成后图层显隐仍能正确预览。
+- 新增 `docs/android-studio-debugging.md`，说明 Android Studio Logcat、`HyPainterInput`、Debug chip 和 GC/input latency 搜索方式。
+
+### Testing
+- `.\gradlew.bat :android:app:testDebugUnitTest`：通过。
+- `.\gradlew.bat :android:app:assembleDebug`：通过。
+
+### Notes
+- 该修复针对真机日志中的 `InputEventAction=1` 后 `Skipped 102 frames`、`Davey duration=1855ms` 和 sticky GC。抬笔事件不应触发全量 bitmap 分配。
+- 导出/分享仍可能卡顿，因为它们仍需生成 PNG；后续应把导出迁到后台任务并显示状态。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `NativePaintingEngine.kt`、`MainActivity.kt` 和新增/修改文档。

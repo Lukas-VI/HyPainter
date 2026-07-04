@@ -632,3 +632,18 @@
 ### Notes
 - 这次是针对“笔碰到 UI 时让它暂时隐藏”的交互修复；当前是 MVP 级自动让路，后续正式 UI 应改成工具面板、浮动 palette 与 palm/stylus-aware hit test 体系。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `MainActivity.kt` 和 progress 本轮修改。
+
+## 2026-07-05 - Task: Debug chip 遵守 stylus UI 避让
+
+### What was done
+- 将 stylus UI 避让状态从 toolbar 专用语义调整为 controls 语义，顶部工具栏和左下角 Debug chip 共用隐藏状态。
+- Debug chip 收到 stylus/eraser pointer 时会消费事件并临时隐藏控制 UI，不再被笔误触切换调试开关。
+- Finger touch 仍可正常点击 Debug chip 打开或关闭调试叠层。
+
+### Testing
+- `.\gradlew.bat :android:app:testDebugUnitTest`：通过。
+- `.\gradlew.bat :android:app:assembleDebug --stacktrace`：通过。
+
+### Notes
+- 这次补齐了“笔碰 UI 自动让路”的底部调试入口边界，避免把 Debug chip 从顶部移到底部后形成新的 stylus 误触点。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `MainActivity.kt` 和 progress 本轮修改。

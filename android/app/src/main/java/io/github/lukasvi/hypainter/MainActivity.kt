@@ -82,9 +82,9 @@ private fun CanvasScreen() {
     val exportStatus = remember { mutableStateOf<String?>(null) }
     val projectStatus = remember { mutableStateOf<String?>(null) }
     val toolbarBusy = remember { mutableStateOf(false) }
-    val toolbarHiddenForStylus = remember { mutableStateOf(false) }
+    val controlsHiddenForStylus = remember { mutableStateOf(false) }
     val toolbarBounds = remember { mutableStateOf<Rect?>(null) }
-    val toolbarHideGeneration = remember { mutableStateOf(0) }
+    val controlsHideGeneration = remember { mutableStateOf(0) }
     val debugOverlayVisible = remember { mutableStateOf(false) }
     val debugState = remember { mutableStateOf(CanvasDebugState()) }
     val coroutineScope = rememberCoroutineScope()
@@ -106,17 +106,17 @@ private fun CanvasScreen() {
         canvasVersion.value++
         Unit
     }
-    val hideToolbarForStylus = {
-        val generation = toolbarHideGeneration.value + 1
-        toolbarHideGeneration.value = generation
-        toolbarHiddenForStylus.value = true
+    val hideControlsForStylus = {
+        val generation = controlsHideGeneration.value + 1
+        controlsHideGeneration.value = generation
+        controlsHiddenForStylus.value = true
         view.postDelayed(
             {
-                if (toolbarHideGeneration.value == generation) {
-                    toolbarHiddenForStylus.value = false
+                if (controlsHideGeneration.value == generation) {
+                    controlsHiddenForStylus.value = false
                 }
             },
-            STYLUS_TOOLBAR_HIDE_MS,
+            STYLUS_CONTROLS_HIDE_MS,
         )
         Unit
     }
@@ -133,11 +133,11 @@ private fun CanvasScreen() {
                     if (toolbarBusy.value) {
                         return@pointerInteropFilter true
                     }
-                    if (!toolbarHiddenForStylus.value &&
+                    if (!controlsHiddenForStylus.value &&
                         event.hasStylusOrEraserPointer() &&
                         toolbarBounds.value?.let { event.isInside(it) } == true
                     ) {
-                        hideToolbarForStylus()
+                        hideControlsForStylus()
                         return@pointerInteropFilter true
                     }
                     inputRouter.onMotionEvent(
@@ -186,7 +186,7 @@ private fun CanvasScreen() {
             }
         }
 
-        if (!toolbarHiddenForStylus.value) {
+        if (!controlsHiddenForStylus.value) {
             CanvasToolbar(
                 modifier = Modifier
                     .align(Alignment.TopStart)
@@ -196,7 +196,7 @@ private fun CanvasScreen() {
                     }
                     .pointerInteropFilter { event ->
                         if (event.hasStylusOrEraserPointer()) {
-                            hideToolbarForStylus()
+                            hideControlsForStylus()
                             true
                         } else {
                             false
@@ -218,11 +218,19 @@ private fun CanvasScreen() {
             )
         }
 
-        if (BuildConfig.DEBUG) {
+        if (BuildConfig.DEBUG && !controlsHiddenForStylus.value) {
             AssistChip(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(16.dp),
+                    .padding(16.dp)
+                    .pointerInteropFilter { event ->
+                        if (event.hasStylusOrEraserPointer()) {
+                            hideControlsForStylus()
+                            true
+                        } else {
+                            false
+                        }
+                    },
                 onClick = { debugOverlayVisible.value = !debugOverlayVisible.value },
                 label = { Text(if (debugOverlayVisible.value) "Debug On" else "Debug") },
             )
@@ -576,4 +584,4 @@ private fun io.github.lukasvi.hypainter.engine.EngineSnapshot.layerIsVisible(lay
     return false
 }
 
-private const val STYLUS_TOOLBAR_HIDE_MS = 1200L
+private const val STYLUS_CONTROLS_HIDE_MS = 1200L

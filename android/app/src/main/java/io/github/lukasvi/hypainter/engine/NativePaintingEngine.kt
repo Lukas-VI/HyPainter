@@ -148,6 +148,7 @@ class NativePaintingEngine private constructor(
             committedStrokes = committedStrokes.toList(),
             activeStroke = preview.activeStroke?.copy(layerId = activeLayerId),
             renderedImage = displayCache.renderedImage,
+            activeImage = preview.activeImage,
         )
     }
 
@@ -162,6 +163,7 @@ class NativePaintingEngine private constructor(
             committedStrokes = emptyList(),
             activeStroke = preview.activeStroke?.copy(layerId = activeLayerId),
             renderedImage = displayCache.renderedImage,
+            activeImage = preview.activeImage,
         )
     }
 

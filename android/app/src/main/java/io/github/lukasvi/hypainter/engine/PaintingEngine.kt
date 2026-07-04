@@ -70,6 +70,7 @@ data class EngineSnapshot(
     val committedStrokes: List<EngineStroke>,
     val activeStroke: EngineStroke?,
     val renderedImage: ImageBitmap? = null,
+    val activeImage: ImageBitmap? = null,
 )
 
 fun createPaintingEngine(width: Int = 1024, height: Int = 1024): PaintingEngine {

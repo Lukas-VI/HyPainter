@@ -532,3 +532,21 @@
 - 如果 `packageDebug` NPE 之后再次出现，优先清理 `android/app/build/intermediates` 与 APK outputs，或执行 `.\gradlew.bat clean :android:app:assembleDebug --stacktrace`；本轮代码状态下未复现。
 - 当前仍需真实安卓平板验证：多笔画压力测试下 GC、`Choreographer` skipped frames 和 MIUI input latency 是否明显下降。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，删除 `StrokeRasterCache.kt` 并还原 `MainActivity.kt` 与 engine 本轮修改。
+
+## 2026-07-05 - Task: 将活动笔画预览改为增量 bitmap 缓存
+
+### What was done
+- 扩展 `StrokeRasterCache`，支持按单点和相邻样本段增量追加，且同一张 mutable bitmap 只创建一次 `ImageBitmap` 包装。
+- `KotlinPaintingEngine` 新增 active stroke 预览缓存：`beginStroke()` 清空并画起点，`appendSample()` 只追加最新线段，`endStroke()` 提交到 committed cache 后清空 active cache。
+- `EngineSnapshot` 新增 `activeImage`，Compose 画布优先绘制活动 bitmap 预览，只有没有缓存时才回退到 vector active stroke 绘制。
+- Native engine 继续复用 Kotlin fallback preview，因此 native 模式下活动笔画也进入同一增量预览路径。
+
+### Testing
+- `.\gradlew.bat :android:app:testDebugUnitTest`：通过。
+- `.\gradlew.bat :android:app:assembleDebug --stacktrace`：通过，包含 Rust native 构建和 `:android:app:packageDebug`。
+
+### Notes
+- 这次针对“单条长笔画越画越卡”的底层路径，避免每帧遍历整条 active stroke；点列表仍保留用于提交、保存和 Debug overlay 的采样计数。
+- 预览缓存仍是全画布透明 bitmap，后续更完整方案应升级为 tile/dirty-rect active preview，以减少大画布内存和局部刷新成本。
+- 当前仍需真机验证：长按笔连续绘制 10-30 秒，观察 `HyPainterInput handle`、Java heap、`Skipped frames` 和 MIUI input latency。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `StrokeRasterCache.kt`、`PaintingEngine.kt`、engine 和 `MainActivity.kt` 本轮修改。

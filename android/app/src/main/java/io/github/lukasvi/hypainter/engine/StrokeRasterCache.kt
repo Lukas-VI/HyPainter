@@ -14,6 +14,9 @@ internal class StrokeRasterCache(
     private var bitmap: Bitmap? = null
     private var canvas: Canvas? = null
     private var image: ImageBitmap? = null
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        strokeCap = Paint.Cap.ROUND
+    }
 
     val renderedImage: ImageBitmap?
         get() = image
@@ -24,7 +27,22 @@ internal class StrokeRasterCache(
             return
         }
         drawStroke(ensureCanvas(), stroke)
-        image = ensureBitmap().asImageBitmap()
+    }
+
+    fun appendSegment(from: EngineSample, to: EngineSample, brush: EngineBrush, layerId: Long, layers: List<EngineLayer>) {
+        if (!isLayerVisible(layerId, layers)) {
+            ensureBitmap()
+            return
+        }
+        drawSegment(ensureCanvas(), from, to, brush)
+    }
+
+    fun appendPoint(sample: EngineSample, brush: EngineBrush, layerId: Long, layers: List<EngineLayer>) {
+        if (!isLayerVisible(layerId, layers)) {
+            ensureBitmap()
+            return
+        }
+        drawPoint(ensureCanvas(), sample, brush)
     }
 
     fun rebuild(strokes: List<EngineStroke>, layers: List<EngineLayer>) {
@@ -36,7 +54,6 @@ internal class StrokeRasterCache(
                 drawStroke(target, stroke)
             }
         }
-        image = ensureBitmap().asImageBitmap()
     }
 
     fun clear() {
@@ -49,6 +66,7 @@ internal class StrokeRasterCache(
         return bitmap ?: Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also {
             bitmap = it
             canvas = Canvas(it)
+            image = it.asImageBitmap()
         }
     }
 
@@ -62,37 +80,39 @@ internal class StrokeRasterCache(
     }
 
     private fun drawStroke(canvas: Canvas, stroke: EngineStroke) {
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = stroke.brush.colorArgb
-            strokeWidth = stroke.brush.radiusPx * 2f
-            strokeCap = Paint.Cap.ROUND
-        }
-
         for (index in 1 until stroke.points.size) {
-            val from = stroke.points[index - 1]
-            val to = stroke.points[index]
-            val pressure = to.pressure.coerceIn(0.1f, 1f)
-            paint.alpha = (pressure * 255).toInt()
-            paint.strokeWidth = stroke.brush.radiusPx * 2f * pressure
-            canvas.drawLine(
-                from.position.x,
-                from.position.y,
-                to.position.x,
-                to.position.y,
-                paint,
-            )
+            drawSegment(canvas, stroke.points[index - 1], stroke.points[index], stroke.brush)
         }
 
         stroke.points.singleOrNull()?.let { point ->
-            val pressure = point.pressure.coerceIn(0.1f, 1f)
-            paint.alpha = (pressure * 255).toInt()
-            canvas.drawCircle(
-                point.position.x,
-                point.position.y,
-                stroke.brush.radiusPx * pressure,
-                paint,
-            )
+            drawPoint(canvas, point, stroke.brush)
         }
+    }
+
+    private fun drawSegment(canvas: Canvas, from: EngineSample, to: EngineSample, brush: EngineBrush) {
+        val pressure = to.pressure.coerceIn(0.1f, 1f)
+        paint.color = brush.colorArgb
+        paint.alpha = (pressure * 255).toInt()
+        paint.strokeWidth = brush.radiusPx * 2f * pressure
+        canvas.drawLine(
+            from.position.x,
+            from.position.y,
+            to.position.x,
+            to.position.y,
+            paint,
+        )
+    }
+
+    private fun drawPoint(canvas: Canvas, sample: EngineSample, brush: EngineBrush) {
+        val pressure = sample.pressure.coerceIn(0.1f, 1f)
+        paint.color = brush.colorArgb
+        paint.alpha = (pressure * 255).toInt()
+        canvas.drawCircle(
+            sample.position.x,
+            sample.position.y,
+            brush.radiusPx * pressure,
+            paint,
+        )
     }
 }
 

@@ -142,9 +142,17 @@ private fun CanvasScreen() {
                         }
                     }
                 }
-                snapshot.activeStroke?.let { stroke ->
-                    if (snapshot.layerIsVisible(stroke.layerId)) {
-                        drawStroke(stroke)
+                snapshot.activeImage?.let { image ->
+                    drawImage(
+                        image = image,
+                        filterQuality = renderOptions.bitmapSampling.toFilterQuality(),
+                    )
+                }
+                if (snapshot.activeImage == null) {
+                    snapshot.activeStroke?.let { stroke ->
+                        if (snapshot.layerIsVisible(stroke.layerId)) {
+                            drawStroke(stroke)
+                        }
                     }
                 }
             }

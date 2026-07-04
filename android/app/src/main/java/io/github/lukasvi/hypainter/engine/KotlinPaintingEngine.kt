@@ -17,11 +17,14 @@ class KotlinPaintingEngine(
     private var brush = EngineBrush(colorArgb = AndroidColor.BLACK, radiusPx = 8f)
     private val layers = mutableListOf(EngineLayer(id = 1L, name = "Layer 1", visible = true))
     private val displayCache = StrokeRasterCache(canvasWidth, canvasHeight)
+    private val activeCache = StrokeRasterCache(canvasWidth, canvasHeight)
     private var activeLayerId = 1L
     private var nextLayerId = 2L
 
     override fun beginStroke(sample: EngineSample) {
+        activeCache.clear()
         activeStroke = mutableListOf(sample)
+        activeCache.appendPoint(sample, brush, activeLayerId, layers)
     }
 
     override fun appendSample(sample: EngineSample) {
@@ -30,7 +33,9 @@ class KotlinPaintingEngine(
             return
         }
 
+        val previous = activeStroke[activeStroke.lastIndex]
         activeStroke.add(sample)
+        activeCache.appendSegment(previous, sample, brush, activeLayerId, layers)
     }
 
     override fun endStroke() {
@@ -39,6 +44,7 @@ class KotlinPaintingEngine(
             committedStrokes.add(stroke)
             displayCache.append(stroke, layers)
             activeStroke = mutableListOf()
+            activeCache.clear()
         }
     }
 
@@ -53,6 +59,7 @@ class KotlinPaintingEngine(
         committedStrokes.clear()
         activeStroke.clear()
         displayCache.clear()
+        activeCache.clear()
         layers.clear()
         layers.add(EngineLayer(id = 1L, name = "Layer 1", visible = true))
         activeLayerId = 1L
@@ -101,6 +108,7 @@ class KotlinPaintingEngine(
         clear()
         layers.clear()
         layers.addAll(project.layers)
+        activeCache.clear()
         activeLayerId = project.activeLayerId
         nextLayerId = (layers.maxOfOrNull { it.id } ?: 0L) + 1L
         committedStrokes.addAll(project.strokes)
@@ -134,6 +142,7 @@ class KotlinPaintingEngine(
                 EngineStroke(it, brush, activeLayerId)
             },
             renderedImage = displayCache.renderedImage,
+            activeImage = activeCache.renderedImage,
         )
     }
 

@@ -1,5 +1,6 @@
 package io.github.lukasvi.hypainter.input
 
+import android.os.SystemClock
 import android.util.Log
 import android.view.MotionEvent
 import androidx.compose.ui.geometry.Offset
@@ -38,12 +39,20 @@ internal class CanvasInputRouter {
         debugEnabled: Boolean,
         onDebugChanged: (CanvasDebugState) -> Unit,
     ): Boolean {
+        val debugStartNs = if (BuildConfig.DEBUG && debugEnabled) System.nanoTime() else 0L
         val consumed = if (stylusPointerId != null || event.actionPointerIsStylus()) {
             handleStylusEvent(event, viewport, engine, onEngineChanged, onEngineChangedNextFrame, onPressure)
         } else {
             handleTouchEvent(event, viewport, onViewportChanged)
         }
-        publishDebug(event, viewport, consumed, debugEnabled, onDebugChanged)
+        publishDebug(
+            event = event,
+            viewport = viewport,
+            consumed = consumed,
+            debugEnabled = debugEnabled,
+            debugStartNs = debugStartNs,
+            onDebugChanged = onDebugChanged,
+        )
         return consumed
     }
 
@@ -188,12 +197,17 @@ internal class CanvasInputRouter {
         viewport: ViewportState,
         consumed: Boolean,
         debugEnabled: Boolean,
+        debugStartNs: Long,
         onDebugChanged: (CanvasDebugState) -> Unit,
     ) {
         if (!BuildConfig.DEBUG || !debugEnabled) {
             return
         }
 
+        val runtime = Runtime.getRuntime()
+        val totalMemory = runtime.totalMemory()
+        val freeMemory = runtime.freeMemory()
+        val maxMemory = runtime.maxMemory()
         val pointerIndex = event.actionIndex.coerceIn(0, event.pointerCount - 1)
         val screen = Offset(event.getX(pointerIndex), event.getY(pointerIndex))
         val next = CanvasDebugState(
@@ -212,6 +226,11 @@ internal class CanvasInputRouter {
             canvasPosition = viewport.toCanvas(screen),
             strokeSamples = strokeSamples,
             historySamples = historySamples,
+            eventAgeMs = (SystemClock.uptimeMillis() - event.eventTime).coerceAtLeast(0L),
+            handleDurationMs = ((System.nanoTime() - debugStartNs).coerceAtLeast(0L) / 1_000_000f),
+            heapUsedKb = (totalMemory - freeMemory) / 1024L,
+            heapFreeKb = freeMemory / 1024L,
+            heapMaxKb = maxMemory / 1024L,
         )
         lastDebugState = next
         onDebugChanged(next)

@@ -22,6 +22,12 @@ Expected route values:
 - `two-finger`: two fingers are driving pan, zoom, and rotation.
 - `ignored`: an unsupported or mixed tool stream was ignored.
 
+Latency and heap fields:
+
+- `age`: time between Android creating the input event and HyPainter handling it. A large value means events are already queued before the router gets them.
+- `handle`: time spent inside HyPainter's input router for this event. A large value means the app is doing too much work during input dispatch.
+- `Heap`: Java heap used/max and free memory at the time diagnostics were emitted. Sudden growth followed by sticky GC points to allocation pressure.
+
 Keep `Debug` off when measuring drawing performance. The overlay and input logs are diagnostic tools and should not be part of baseline latency testing.
 
 ## Use Logcat In Android Studio
@@ -59,3 +65,4 @@ Warning signs:
 - Sticky or frequent GC during stylus down/move/up
 
 For baseline latency, turn the in-app `Debug` chip off, draw long strokes, then inspect GC and frame logs.
+For router latency, turn `Debug` on briefly and compare `age` against `handle`: high `age` with low `handle` means backlog outside the router; high `handle` means HyPainter input work is too heavy.

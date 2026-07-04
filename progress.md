@@ -429,3 +429,20 @@
 - 该修复针对真机日志中的 `InputEventAction=1` 后 `Skipped 102 frames`、`Davey duration=1855ms` 和 sticky GC。抬笔事件不应触发全量 bitmap 分配。
 - 导出/分享仍可能卡顿，因为它们仍需生成 PNG；后续应把导出迁到后台任务并显示状态。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `NativePaintingEngine.kt`、`MainActivity.kt` 和新增/修改文档。
+
+## 2026-07-05 - Task: 增加输入延迟与堆内存调试指标
+
+### What was done
+- Debug overlay 和 `HyPainterInput` Logcat 增加 `eventAgeMs`，用于判断事件到达 HyPainter 前是否已经积压。
+- 增加 `handleDurationMs`，用于判断 HyPainter 输入路由本身是否耗时过长。
+- 增加 Java heap used/free/max KB，辅助关联 sticky GC 与输入事件。
+- 更新 Android Studio 调试文档，说明 `age`、`handle` 与 `Heap` 字段的判读方式。
+
+### Testing
+- `.\gradlew.bat :android:app:testDebugUnitTest`：通过。
+- `.\gradlew.bat :android:app:assembleDebug`：通过。
+
+### Notes
+- 指标只在 debug build 且 `Debug` chip 打开时计算，避免影响正常绘制性能基线。
+- 真机排查时先关 Debug 测 GC/Choreographer，再短暂打开 Debug 区分事件 backlog 与 router 自身耗时。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `debug/*`、`input/CanvasInputRouter.kt`、`docs/android-studio-debugging.md` 和 progress 本轮修改。

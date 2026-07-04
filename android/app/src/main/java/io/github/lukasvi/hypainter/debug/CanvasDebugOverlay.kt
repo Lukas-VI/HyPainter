@@ -28,6 +28,8 @@ internal fun CanvasDebugOverlay(
         Text("Tool: ${state.toolType} pointers=${state.pointerCount}", color = Color.White)
         Text("Consumed: ${state.consumed}", color = Color.White)
         Text("Samples: ${state.strokeSamples} history=${state.historySamples}", color = Color.White)
+        Text("Latency: age=${state.eventAgeMs}ms handle=${"%.2f".format(state.handleDurationMs)}ms", color = Color.White)
+        Text("Heap: ${state.heapUsedKb}/${state.heapMaxKb} KB free=${state.heapFreeKb} KB", color = Color.White)
         Text("Pressure: ${"%.2f".format(state.pressure)}", color = Color.White)
         Text("Screen: ${state.screenPosition.debugFormat()}", color = Color.White)
         Text("Canvas: ${state.canvasPosition.debugFormat()}", color = Color.White)

@@ -681,3 +681,19 @@
 ### Notes
 - 这次修复上一轮的关键边界：如果笔已经 hover 在 UI 上，再按下应该是明确的 UI 操作，而不是继续隐藏控件。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `StylusControlsHider.kt`、`StylusControlsHiderTest.kt`、`MainActivity.kt` 和 progress 本轮修改。
+
+## 2026-07-05 - Task: 修复 stylus MOVE 恢复时未显式开笔
+
+### What was done
+- 修复 `CanvasInputRouter` 的 stylus MOVE 恢复路径：当 `ACTION_DOWN` 被 UI 避让或系统边界吞掉、后续 MOVE 才恢复 stylus pointer 时，现在会先用最早历史采样显式 `beginStroke`，再追加剩余历史点和当前点。
+- 无历史采样的恢复 MOVE 会以当前点开 stroke 并立即刷新画布，避免只有输入 session、没有 active stroke 的半恢复状态。
+- Debug overlay 的 active pointer 查询改为无副作用路径，避免仅打开 debug 时因为查询缺失 pointer 而清掉输入 session。
+- 修正恢复路径中的 debug sample 计数，避免首个历史点既作为 begin 又被重复计入。
+
+### Testing
+- `.\gradlew.bat :android:app:testDebugUnitTest`：通过。
+
+### Notes
+- 这个漏洞会在“按压扫进/扫出 UI、DOWN 被消费，但 MOVE 继续到画布”的场景里放大，表现可能是首段笔画丢失或恢复后输入状态与 engine stroke 状态不一致。
+- 当前项目没有 Robolectric，未新增 `MotionEvent` 级路由单测；后续如果要继续压实输入链路，建议加一个轻量 Android/Robolectric 测试层专门覆盖 ACTION_DOWN/MOVE/UP/CANCEL 序列。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `CanvasInputRouter.kt` 和 progress 本轮修改。

@@ -93,13 +93,30 @@ internal class CanvasInputRouter {
                     strokeSamples = 0
                     historySamples = 0
                     recoveredStylusPointerOnLastEvent = true
-                }
-                for (historyIndex in 0 until event.historySize) {
-                    engine.appendSample(event.toSample(pointerIndex, viewport, historyIndex))
+                    if (event.historySize > 0) {
+                        engine.beginStroke(event.toSample(pointerIndex, viewport, historicalIndex = 0))
+                        for (historyIndex in 1 until event.historySize) {
+                            engine.appendSample(event.toSample(pointerIndex, viewport, historyIndex))
+                        }
+                        historySamples += event.historySize
+                        strokeSamples += event.historySize
+                    } else {
+                        engine.beginStroke(event.toSample(pointerIndex, viewport, historicalIndex = null))
+                        strokeSamples = 1
+                        lastPressureReportTime = event.eventTime
+                        onPressure(event.getPressure(pointerIndex).coerceIn(0f, 1f))
+                        onEngineChanged()
+                        return true
+                    }
+                } else {
+                    for (historyIndex in 0 until event.historySize) {
+                        engine.appendSample(event.toSample(pointerIndex, viewport, historyIndex))
+                    }
+                    historySamples += event.historySize
+                    strokeSamples += event.historySize
                 }
                 engine.appendSample(event.toSample(pointerIndex, viewport, historicalIndex = null))
-                historySamples += event.historySize
-                strokeSamples += event.historySize + 1
+                strokeSamples += 1
                 if (event.eventTime - lastPressureReportTime >= PRESSURE_REPORT_INTERVAL_MS) {
                     lastPressureReportTime = event.eventTime
                     onPressure(event.getPressure(pointerIndex).coerceIn(0f, 1f))
@@ -175,6 +192,12 @@ internal class CanvasInputRouter {
         return pointerIndex
     }
 
+    private fun MotionEvent.activeStylusPointerIndexOrNull(): Int? {
+        val activePointerId = session.stylusPointerId ?: return null
+        val pointerIndex = findPointerIndex(activePointerId)
+        return pointerIndex.takeIf { it >= 0 }
+    }
+
     private fun publishDebug(
         event: MotionEvent,
         viewport: ViewportState,
@@ -191,7 +214,7 @@ internal class CanvasInputRouter {
         val totalMemory = runtime.totalMemory()
         val freeMemory = runtime.freeMemory()
         val maxMemory = runtime.maxMemory()
-        val pointerIndex = event.findActiveStylusPointerIndex()
+        val pointerIndex = event.activeStylusPointerIndexOrNull()
             ?: event.findAnyStylusPointerIndex()
             ?: event.actionIndex.coerceIn(0, event.pointerCount - 1)
         val screen = Offset(event.getX(pointerIndex), event.getY(pointerIndex))

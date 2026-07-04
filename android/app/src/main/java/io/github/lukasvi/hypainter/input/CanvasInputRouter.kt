@@ -19,10 +19,8 @@ import kotlin.math.atan2
 import kotlin.math.hypot
 
 internal class CanvasInputRouter {
-    private var stylusPointerId: Int? = null
-    private var lastTouchGesture: TouchGestureFrame? = null
+    private val session = CanvasInputSession()
     private var lastDebugState = CanvasDebugState()
-    private var fingerStreamActive = false
     private var strokeSamples = 0
     private var historySamples = 0
     private var lastLogTime = 0L
@@ -40,7 +38,7 @@ internal class CanvasInputRouter {
         onDebugChanged: (CanvasDebugState) -> Unit,
     ): Boolean {
         val debugStartNs = if (BuildConfig.DEBUG && debugEnabled) System.nanoTime() else 0L
-        val consumed = if (stylusPointerId != null || event.actionPointerIsStylus()) {
+        val consumed = if (session.shouldRouteToStylus(event.actionPointerIsStylus())) {
             handleStylusEvent(event, viewport, engine, onEngineChanged, onEngineChangedNextFrame, onPressure)
         } else {
             handleTouchEvent(event, viewport, onViewportChanged)
@@ -68,11 +66,9 @@ internal class CanvasInputRouter {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
                 val pointerIndex = event.actionIndex
                 if (!event.isStylusPointer(pointerIndex)) {
-                    return stylusPointerId != null
+                    return session.stylusPointerId != null
                 }
-                stylusPointerId = event.getPointerId(pointerIndex)
-                fingerStreamActive = false
-                lastTouchGesture = null
+                session.beginStylus(event.getPointerId(pointerIndex))
                 strokeSamples = 1
                 historySamples = 0
                 lastPressureReportTime = event.eventTime
@@ -86,9 +82,7 @@ internal class CanvasInputRouter {
                 val pointerIndex = event.findActiveStylusPointerIndex()
                 if (pointerIndex == null) {
                     engine.endStroke()
-                    stylusPointerId = null
-                    lastTouchGesture = null
-                    fingerStreamActive = false
+                    session.loseStylusPointer()
                     onEngineChanged()
                     return true
                 }
@@ -107,23 +101,16 @@ internal class CanvasInputRouter {
             }
 
             MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
-                val activePointerId = stylusPointerId
-                if (activePointerId != null && event.getPointerId(event.actionIndex) == activePointerId) {
+                if (session.endStylusIfActive(event.getPointerId(event.actionIndex))) {
                     engine.endStroke()
-                    stylusPointerId = null
-                    lastTouchGesture = null
-                    fingerStreamActive = false
                     onEngineChanged()
                 }
                 return true
             }
 
             MotionEvent.ACTION_CANCEL -> {
-                if (stylusPointerId != null) {
+                if (session.cancelStylus()) {
                     engine.endStroke()
-                    stylusPointerId = null
-                    lastTouchGesture = null
-                    fingerStreamActive = false
                     onEngineChanged()
                 }
                 return true
@@ -139,54 +126,42 @@ internal class CanvasInputRouter {
         onViewportChanged: (ViewportState) -> Unit,
     ): Boolean {
         if (!event.allPointersAreFingers()) {
-            lastTouchGesture = null
-            return false
+            return session.rejectNonFingerTouch()
         }
 
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                fingerStreamActive = true
-                lastTouchGesture = null
-                return true
+                return session.beginFingerStream()
             }
 
             MotionEvent.ACTION_POINTER_DOWN, MotionEvent.ACTION_MOVE -> {
                 if (event.pointerCount < 2) {
-                    lastTouchGesture = null
-                    return fingerStreamActive
+                    return session.updateSingleFingerTouch()
                 }
 
-                val next = event.touchGestureFrame()
-                val previous = lastTouchGesture
-                lastTouchGesture = next
-                if (previous != null) {
-                    onViewportChanged(
-                        viewport.transformAround(
-                            previous = previous,
-                            next = next,
-                        ),
-                    )
-                }
-                return true
+                return session.updateTwoFingerTouch(
+                    viewport = viewport,
+                    next = event.touchGestureFrame(),
+                    onViewportChanged = onViewportChanged,
+                )
             }
 
             MotionEvent.ACTION_POINTER_UP, MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                lastTouchGesture = null
-                if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
-                    fingerStreamActive = false
-                }
-                return fingerStreamActive
+                return session.endTouchStream(
+                    terminal = event.actionMasked == MotionEvent.ACTION_UP ||
+                        event.actionMasked == MotionEvent.ACTION_CANCEL,
+                )
             }
         }
 
-        return fingerStreamActive
+        return session.updateSingleFingerTouch()
     }
 
     private fun MotionEvent.findActiveStylusPointerIndex(): Int? {
-        val activePointerId = stylusPointerId ?: return null
+        val activePointerId = session.stylusPointerId ?: return null
         val pointerIndex = findPointerIndex(activePointerId)
         if (pointerIndex < 0) {
-            stylusPointerId = null
+            session.loseStylusPointer()
             return null
         }
         return pointerIndex
@@ -212,7 +187,7 @@ internal class CanvasInputRouter {
         val screen = Offset(event.getX(pointerIndex), event.getY(pointerIndex))
         val next = CanvasDebugState(
             route = when {
-                stylusPointerId != null -> "stylus"
+                session.stylusPointerId != null -> "stylus"
                 event.pointerCount >= 2 && event.allPointersAreFingers() -> "two-finger"
                 event.allPointersAreFingers() -> "single-finger"
                 else -> "ignored"

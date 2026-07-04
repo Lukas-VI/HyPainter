@@ -550,3 +550,20 @@
 - 预览缓存仍是全画布透明 bitmap，后续更完整方案应升级为 tile/dirty-rect active preview，以减少大画布内存和局部刷新成本。
 - 当前仍需真机验证：长按笔连续绘制 10-30 秒，观察 `HyPainterInput handle`、Java heap、`Skipped frames` 和 MIUI input latency。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `StrokeRasterCache.kt`、`PaintingEngine.kt`、engine 和 `MainActivity.kt` 本轮修改。
+
+## 2026-07-05 - Task: 为输入优先级状态机增加单测护栏
+
+### What was done
+- 新增 `CanvasInputSession`，把 stylus priority、finger stream、two-finger previous frame 等输入状态从 `CanvasInputRouter` 中抽成纯 Kotlin 核心。
+- `CanvasInputRouter` 继续负责 `MotionEvent` 读取、historical samples 和 engine 调用，但输入流接管/释放改由 `CanvasInputSession` 统一管理。
+- 新增 `CanvasInputSessionTest`，覆盖 stylus 接管后清理 finger gesture、非当前 stylus pointer up 不结束笔画、当前 stylus pointer up 释放优先级、单指不触发 viewport transform、双指从上一帧到下一帧围绕 centroid 锚定。
+- 对照 Android `MotionEvent` 的 action index、pointer id、tool type 与 historical sample 语义，继续保持生产路由按 active pointer id 查找 stylus pointer。
+
+### Testing
+- `.\gradlew.bat :android:app:testDebugUnitTest`：通过。
+- `.\gradlew.bat :android:app:assembleDebug --stacktrace`：通过，包含 Rust native 构建和 `:android:app:packageDebug`。
+
+### Notes
+- 这组测试不能替代真机厂商输入序列验证，但能防止最关键的输入分层规则被后续 UI/手势改动无声破坏。
+- 后续可在引入 Robolectric 或 instrumentation test 后，直接构造/回放真实 `MotionEvent` 序列验证 router 到 engine 的端到端行为。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，删除 `CanvasInputSession.kt` 与 `CanvasInputSessionTest.kt`，并将状态字段恢复到 `CanvasInputRouter.kt`。

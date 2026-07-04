@@ -647,3 +647,20 @@
 ### Notes
 - 这次补齐了“笔碰 UI 自动让路”的底部调试入口边界，避免把 Debug chip 从顶部移到底部后形成新的 stylus 误触点。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `MainActivity.kt` 和 progress 本轮修改。
+
+## 2026-07-05 - Task: 调整 stylus UI 避让为 hover 恢复
+
+### What was done
+- 将 controls hiding 状态抽到 `StylusControlsHider`，规则改为“stylus/eraser 按压进入 UI 区隐藏，hover 或离开 UI 区立即显示”。
+- 顶部工具栏继续在按压命中时隐藏，Canvas 在检测到 stylus hover 或 pointer 离开工具栏 bounds 时立刻恢复 UI，避免笔无法点 UI。
+- Debug chip 保持 finger 可点击；stylus 按压命中会隐藏 controls，stylus hover 会恢复 controls。
+- Debug 黑色 overlay 从右下角移动到左下角；Debug chip 移到右上角，避免与 overlay 重叠。
+- 新增 `StylusControlsHiderTest`，覆盖隐藏直到 hover、hover 立即显示、离开 UI 使用同一即时显示路径。
+
+### Testing
+- `.\gradlew.bat :android:app:testDebugUnitTest`：通过。
+- `.\gradlew.bat :android:app:assembleDebug --stacktrace`：通过。
+
+### Notes
+- 这次修正了上一轮定时恢复模型：UI 不再靠固定 1.2 秒恢复，而是由 stylus hover/离开 UI 这两个输入语义驱动，更符合板绘应用里“笔靠近工具才参与 UI”的预期。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，删除 `StylusControlsHider.kt`、`StylusControlsHiderTest.kt`，并还原 `MainActivity.kt` 和 progress 本轮修改。

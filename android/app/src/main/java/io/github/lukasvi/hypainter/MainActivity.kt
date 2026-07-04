@@ -24,6 +24,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -82,9 +84,8 @@ private fun CanvasScreen() {
     val exportStatus = remember { mutableStateOf<String?>(null) }
     val projectStatus = remember { mutableStateOf<String?>(null) }
     val toolbarBusy = remember { mutableStateOf(false) }
-    val controlsHiddenForStylus = remember { mutableStateOf(false) }
     val toolbarBounds = remember { mutableStateOf<Rect?>(null) }
-    val controlsHideGeneration = remember { mutableStateOf(0) }
+    var controlsHiddenForStylus by remember { mutableStateOf(false) }
     val debugOverlayVisible = remember { mutableStateOf(false) }
     val debugState = remember { mutableStateOf(CanvasDebugState()) }
     val coroutineScope = rememberCoroutineScope()
@@ -95,6 +96,7 @@ private fun CanvasScreen() {
             canvasVersion.value++
         }
     }
+    val controlsHider = remember { StylusControlsHider() }
     val snapshot = remember(canvasVersion.value) { engine.canvasSnapshot() }
     val toolbarSnapshot = remember(modelVersion.value) { engine.snapshot() }
     val refreshCanvas = {
@@ -107,17 +109,13 @@ private fun CanvasScreen() {
         Unit
     }
     val hideControlsForStylus = {
-        val generation = controlsHideGeneration.value + 1
-        controlsHideGeneration.value = generation
-        controlsHiddenForStylus.value = true
-        view.postDelayed(
-            {
-                if (controlsHideGeneration.value == generation) {
-                    controlsHiddenForStylus.value = false
-                }
-            },
-            STYLUS_CONTROLS_HIDE_MS,
-        )
+        controlsHider.hideUntilHover()
+        controlsHiddenForStylus = controlsHider.hidden
+        Unit
+    }
+    val showControlsForStylus = {
+        controlsHider.showForHover()
+        controlsHiddenForStylus = controlsHider.hidden
         Unit
     }
 
@@ -133,12 +131,14 @@ private fun CanvasScreen() {
                     if (toolbarBusy.value) {
                         return@pointerInteropFilter true
                     }
-                    if (!controlsHiddenForStylus.value &&
-                        event.hasStylusOrEraserPointer() &&
-                        toolbarBounds.value?.let { event.isInside(it) } == true
-                    ) {
-                        hideControlsForStylus()
-                        return@pointerInteropFilter true
+                    if (event.hasStylusOrEraserPointer()) {
+                        val insideToolbar = toolbarBounds.value?.let { event.isInside(it) } == true
+                        if (event.isStylusHoverEvent() || !insideToolbar) {
+                            showControlsForStylus()
+                        } else if (!controlsHiddenForStylus && event.isStylusPressEvent() && insideToolbar) {
+                            hideControlsForStylus()
+                            return@pointerInteropFilter true
+                        }
                     }
                     inputRouter.onMotionEvent(
                         event = event,
@@ -186,7 +186,7 @@ private fun CanvasScreen() {
             }
         }
 
-        if (!controlsHiddenForStylus.value) {
+        if (!controlsHiddenForStylus) {
             CanvasToolbar(
                 modifier = Modifier
                     .align(Alignment.TopStart)
@@ -218,16 +218,19 @@ private fun CanvasScreen() {
             )
         }
 
-        if (BuildConfig.DEBUG && !controlsHiddenForStylus.value) {
+        if (BuildConfig.DEBUG && !controlsHiddenForStylus) {
             AssistChip(
                 modifier = Modifier
-                    .align(Alignment.BottomStart)
+                    .align(Alignment.TopEnd)
                     .padding(16.dp)
                     .pointerInteropFilter { event ->
-                        if (event.hasStylusOrEraserPointer()) {
+                        if (event.isStylusPressEvent()) {
                             hideControlsForStylus()
                             true
                         } else {
+                            if (event.isStylusHoverEvent()) {
+                                showControlsForStylus()
+                            }
                             false
                         }
                     },
@@ -239,7 +242,7 @@ private fun CanvasScreen() {
         if (BuildConfig.DEBUG && debugOverlayVisible.value) {
             CanvasDebugOverlay(
                 modifier = Modifier
-                    .align(Alignment.BottomEnd)
+                    .align(Alignment.BottomStart)
                     .padding(16.dp),
                 state = debugState.value,
                 viewport = viewport.value,
@@ -516,6 +519,20 @@ private fun MotionEvent.hasStylusOrEraserPointer(): Boolean {
     return false
 }
 
+private fun MotionEvent.isStylusHoverEvent(): Boolean {
+    return hasStylusOrEraserPointer() &&
+        (actionMasked == MotionEvent.ACTION_HOVER_ENTER ||
+            actionMasked == MotionEvent.ACTION_HOVER_MOVE ||
+            actionMasked == MotionEvent.ACTION_HOVER_EXIT)
+}
+
+private fun MotionEvent.isStylusPressEvent(): Boolean {
+    return hasStylusOrEraserPointer() &&
+        (actionMasked == MotionEvent.ACTION_DOWN ||
+            actionMasked == MotionEvent.ACTION_POINTER_DOWN ||
+            actionMasked == MotionEvent.ACTION_MOVE)
+}
+
 private fun MotionEvent.isInside(bounds: Rect): Boolean {
     for (index in 0 until pointerCount) {
         val toolType = getToolType(index)
@@ -583,5 +600,3 @@ private fun io.github.lukasvi.hypainter.engine.EngineSnapshot.layerIsVisible(lay
     }
     return false
 }
-
-private const val STYLUS_CONTROLS_HIDE_MS = 1200L

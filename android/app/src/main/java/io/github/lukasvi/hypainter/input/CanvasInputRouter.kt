@@ -38,7 +38,7 @@ internal class CanvasInputRouter {
         onDebugChanged: (CanvasDebugState) -> Unit,
     ): Boolean {
         val debugStartNs = if (BuildConfig.DEBUG && debugEnabled) System.nanoTime() else 0L
-        val consumed = if (session.shouldRouteToStylus(event.actionPointerIsStylus())) {
+        val consumed = if (session.shouldRouteToStylus(event.hasStylusPointer())) {
             handleStylusEvent(event, viewport, engine, onEngineChanged, onEngineChangedNextFrame, onPressure)
         } else {
             handleTouchEvent(event, viewport, onViewportChanged)
@@ -79,12 +79,17 @@ internal class CanvasInputRouter {
             }
 
             MotionEvent.ACTION_MOVE -> {
-                val pointerIndex = event.findActiveStylusPointerIndex()
+                val pointerIndex = event.findActiveStylusPointerIndex() ?: event.findAnyStylusPointerIndex()
                 if (pointerIndex == null) {
                     engine.endStroke()
                     session.loseStylusPointer()
                     onEngineChanged()
                     return true
+                }
+                if (session.stylusPointerId == null) {
+                    session.beginStylus(event.getPointerId(pointerIndex))
+                    strokeSamples = 0
+                    historySamples = 0
                 }
                 for (historyIndex in 0 until event.historySize) {
                     engine.appendSample(event.toSample(pointerIndex, viewport, historyIndex))
@@ -183,7 +188,9 @@ internal class CanvasInputRouter {
         val totalMemory = runtime.totalMemory()
         val freeMemory = runtime.freeMemory()
         val maxMemory = runtime.maxMemory()
-        val pointerIndex = event.actionIndex.coerceIn(0, event.pointerCount - 1)
+        val pointerIndex = event.findActiveStylusPointerIndex()
+            ?: event.findAnyStylusPointerIndex()
+            ?: event.actionIndex.coerceIn(0, event.pointerCount - 1)
         val screen = Offset(event.getX(pointerIndex), event.getY(pointerIndex))
         val next = CanvasDebugState(
             route = when {
@@ -217,8 +224,8 @@ internal class CanvasInputRouter {
     }
 }
 
-private fun MotionEvent.actionPointerIsStylus(): Boolean {
-    return actionIndex in 0 until pointerCount && isStylusPointer(actionIndex)
+private fun MotionEvent.hasStylusPointer(): Boolean {
+    return findAnyStylusPointerIndex() != null
 }
 
 private fun MotionEvent.isStylusPointer(pointerIndex: Int): Boolean {
@@ -234,6 +241,15 @@ private fun MotionEvent.allPointersAreFingers(): Boolean {
         }
     }
     return true
+}
+
+private fun MotionEvent.findAnyStylusPointerIndex(): Int? {
+    for (index in 0 until pointerCount) {
+        if (isStylusPointer(index)) {
+            return index
+        }
+    }
+    return null
 }
 
 private fun MotionEvent.touchGestureFrame(): TouchGestureFrame {

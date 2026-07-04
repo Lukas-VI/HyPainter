@@ -9,6 +9,17 @@
 
 The `io.github.lukasvi.hypainter.debug` package is not a separate app or launch target. It is compiled into the normal debug APK and is activated from the in-app `Debug` toolbar chip.
 
+When Android Studio prints a command like this:
+
+```text
+adb shell am start -n io.github.lukasvi.hypainter/io.github.lukasvi.hypainter.MainActivity ... -D --suspend
+Connected to the target VM
+```
+
+it has started the app in Java/Kotlin debugger mode. `-D --suspend` means Android starts the activity under debugger control and waits until Android Studio attaches. Use this mode for breakpoints, stepping through code, and inspecting state. Do not use it as the baseline for stylus latency or GC measurements, because breakpoints and debugger attach can distort timing.
+
+For performance checks, use normal `Run` or install the debug APK and launch it normally, then use Logcat and the in-app `Debug` chip only when diagnostics are needed.
+
 ## Use The Input Overlay
 
 1. Start the app.

@@ -567,3 +567,20 @@
 - 这组测试不能替代真机厂商输入序列验证，但能防止最关键的输入分层规则被后续 UI/手势改动无声破坏。
 - 后续可在引入 Robolectric 或 instrumentation test 后，直接构造/回放真实 `MotionEvent` 序列验证 router 到 engine 的端到端行为。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，删除 `CanvasInputSession.kt` 与 `CanvasInputSessionTest.kt`，并将状态字段恢复到 `CanvasInputRouter.kt`。
+
+## 2026-07-05 - Task: 改善首段笔画丢失诊断与 stylus 指针恢复
+
+### What was done
+- `CanvasInputRouter` 不再只用 `actionIndex` 判断是否进入 stylus 路由，改为扫描当前事件中的任意 stylus/eraser pointer，降低厂商多指/掌触事件中 stylus pointer 不是 action pointer 时漏判的概率。
+- 当 `ACTION_MOVE` 中找不到已记录的 active stylus pointer，但事件里仍存在 stylus pointer 时，会重新接管该 pointer 并继续追加样本，避免首个 down/pointer id 状态异常后整段笔画被放弃。
+- Debug overlay/Logcat 的 MOVE 坐标优先显示 active stylus pointer，其次显示任意 stylus pointer，避免用无语义的 MOVE `actionIndex` 误导排查。
+- 更新 Android Studio 调试文档，说明 `-D --suspend`/`Connected to the target VM` 是断点调试启动方式，不适合作为 stylus 延迟和 GC 的基线测量方式。
+
+### Testing
+- `.\gradlew.bat :android:app:testDebugUnitTest`：通过。
+- `.\gradlew.bat :android:app:assembleDebug --stacktrace`：通过。
+
+### Notes
+- 用户真机反馈实时渲染后笔画、撤销已非常流畅且跟手，但偶发“吃首部笔画”；本轮先修复最可疑的 stylus pointer 选择和诊断误差。
+- 如果仍出现首段缺失，下一步应短暂打开 in-app `Debug` chip，用 `adb logcat -s HyPainterInput` 对比缺失笔画开头的 action/tool/pointers/samples/history。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `CanvasInputRouter.kt`、`docs/android-studio-debugging.md` 与 progress 本轮修改。

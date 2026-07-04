@@ -584,3 +584,18 @@
 - 用户真机反馈实时渲染后笔画、撤销已非常流畅且跟手，但偶发“吃首部笔画”；本轮先修复最可疑的 stylus pointer 选择和诊断误差。
 - 如果仍出现首段缺失，下一步应短暂打开 in-app `Debug` chip，用 `adb logcat -s HyPainterInput` 对比缺失笔画开头的 action/tool/pointers/samples/history。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `CanvasInputRouter.kt`、`docs/android-studio-debugging.md` 与 progress 本轮修改。
+
+## 2026-07-05 - Task: 增强首段笔画缺失调试字段
+
+### What was done
+- `CanvasDebugState` 和 `HyPainterInput` Logcat 增加 selected `pointerId`、active stylus pointer id、`historySize`、`eventTime`、`downTime` 和 `recoveredStylusPointer`。
+- Debug overlay 同步显示 pointer、history、event/down time 和 recovery 状态，便于在真机上短时间打开 overlay 观察首段缺失。
+- `CanvasInputRouter` 在 MOVE 中恢复 stylus pointer 时标记 `recoveredStylusPointer=true`，用于区分正常 DOWN 起笔和 MOVE 恢复起笔。
+
+### Testing
+- `.\gradlew.bat :android:app:testDebugUnitTest`：通过。
+- `.\gradlew.bat :android:app:assembleDebug --stacktrace`：通过。
+
+### Notes
+- 用户提供的 MIUIInput 日志只能证明系统窗口收到 DOWN/UP/MOVE 摘要，不能证明 tool type、HyPainter route、历史样本和 canvas 映射；后续首段缺失需抓 `HyPainterInput`。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `debug/*`、`CanvasInputRouter.kt` 和 progress 本轮修改。

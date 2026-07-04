@@ -25,6 +25,7 @@ internal class CanvasInputRouter {
     private var historySamples = 0
     private var lastLogTime = 0L
     private var lastPressureReportTime = 0L
+    private var recoveredStylusPointerOnLastEvent = false
 
     fun onMotionEvent(
         event: MotionEvent,
@@ -38,6 +39,7 @@ internal class CanvasInputRouter {
         onDebugChanged: (CanvasDebugState) -> Unit,
     ): Boolean {
         val debugStartNs = if (BuildConfig.DEBUG && debugEnabled) System.nanoTime() else 0L
+        recoveredStylusPointerOnLastEvent = false
         val consumed = if (session.shouldRouteToStylus(event.hasStylusPointer())) {
             handleStylusEvent(event, viewport, engine, onEngineChanged, onEngineChangedNextFrame, onPressure)
         } else {
@@ -90,6 +92,7 @@ internal class CanvasInputRouter {
                     session.beginStylus(event.getPointerId(pointerIndex))
                     strokeSamples = 0
                     historySamples = 0
+                    recoveredStylusPointerOnLastEvent = true
                 }
                 for (historyIndex in 0 until event.historySize) {
                     engine.appendSample(event.toSample(pointerIndex, viewport, historyIndex))
@@ -202,12 +205,18 @@ internal class CanvasInputRouter {
             action = event.actionMasked.actionName(),
             toolType = event.getToolType(pointerIndex).toolTypeName(),
             pointerCount = event.pointerCount,
+            pointerId = event.getPointerId(pointerIndex),
+            activeStylusPointerId = session.stylusPointerId,
             consumed = consumed,
             pressure = event.getPressure(pointerIndex).coerceIn(0f, 1f),
             screenPosition = screen,
             canvasPosition = viewport.toCanvas(screen),
             strokeSamples = strokeSamples,
             historySamples = historySamples,
+            historySize = event.historySize,
+            eventTime = event.eventTime,
+            downTime = event.downTime,
+            recoveredStylusPointer = recoveredStylusPointerOnLastEvent,
             eventAgeMs = (SystemClock.uptimeMillis() - event.eventTime).coerceAtLeast(0L),
             handleDurationMs = ((System.nanoTime() - debugStartNs).coerceAtLeast(0L) / 1_000_000f),
             heapUsedKb = (totalMemory - freeMemory) / 1024L,

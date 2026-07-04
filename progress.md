@@ -397,3 +397,17 @@
 ### Notes
 - 这次是结构整理，为后续对输入状态机做单元测试或替换为更正式的事件管线留出边界。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，删除 `input/CanvasInputRouter.kt` 并把路由类与 helper 恢复到 `MainActivity.kt`。
+
+## 2026-07-05 - Task: 增加真机输入验收清单
+
+### What was done
+- 新增 `docs/device-input-test-plan.md`，覆盖 stylus priority、screen-to-canvas mapping、touch layering、two-finger centroid rotation 和 long-stroke performance。
+- 清单写明 Debug overlay、`adb logcat -s HyPainterInput`、预期 route/action/tool 和失败时应记录的证据。
+- Android README 与 MVP 状态文档增加真机输入验收入口。
+
+### Testing
+- 文档变更，无运行逻辑修改。
+
+### Notes
+- 这份清单用于补齐当前自动化测试无法证明的部分：厂商手写笔事件、掌触序列、真实触控采样率和实际 UI 卡顿。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，删除 `docs/device-input-test-plan.md` 并还原 android/README、docs/mvp-status.md 和 progress 本轮修改。

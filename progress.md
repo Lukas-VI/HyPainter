@@ -246,3 +246,18 @@
 - 这组测试直接约束本轮最容易回归的底层漏洞：旋转后的 screen-to-canvas 映射和双指变换中心。
 - 仍需要真机输入流验证，因为 JVM 单测不能证明厂商手写笔事件序列、掌触事件序列和 Compose/Android 分发细节。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，删除 `CanvasViewport.kt`、`CanvasViewportTest.kt`，并将视口数据结构恢复到 `MainActivity.kt`。
+
+## 2026-07-05 - Task: 降低输入调试与压感读数的高频开销
+
+### What was done
+- `Debug` chip 关闭时不再更新 overlay Compose state，也不再写 `HyPainterInput` Logcat，避免调试组件默认参与每个输入事件。
+- 压感读数更新节流到 80ms，减少长笔画 MOVE 事件对工具栏文本的重组压力。
+- 当 MOVE 事件中找不到当前 stylus pointer 时主动结束当前 stroke 并刷新状态，避免 active stroke 悬挂。
+- 更新 Android README 与 MVP 状态文档，说明 Logcat 输入调试需要先打开 `Debug` chip。
+
+### Testing
+- `.\gradlew.bat :android:app:testDebugUnitTest`：通过。
+
+### Notes
+- 这次只降低诊断和读数 UI 的高频开销；实时笔画预览仍保留每个 MOVE 事件刷新，后续若仍卡顿，应继续做帧率节流或局部绘制刷新。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `MainActivity.kt`、android/README、docs/mvp-status.md 和 progress 本轮修改。

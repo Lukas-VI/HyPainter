@@ -22,12 +22,12 @@ Current app status:
 - Provides MVP layer controls: add layer, select active layer, hide/show layer, and persist layer metadata.
 - Maps screen coordinates through viewport pan, zoom, and rotation before samples enter the painting engine.
 
-Debug input on a connected device:
+Debug input on a connected device after enabling the toolbar `Debug` chip:
 
 ```powershell
 adb logcat -s HyPainterInput
 ```
 
-In debug builds, use the toolbar `Debug` chip to show the canvas input overlay. It reports the current route, action, tool type, pointer count, pressure, sample counts, screen/canvas coordinates, and viewport transform.
+In debug builds, the toolbar `Debug` chip shows the canvas input overlay and enables throttled `HyPainterInput` Logcat lines. It reports the current route, action, tool type, pointer count, pressure, sample counts, screen/canvas coordinates, and viewport transform. With `Debug` off, overlay state and input logs stay disabled so normal drawing has less diagnostic overhead.
 
 The next step is validating the input router on a real stylus tablet and improving the visual layout beyond the current single-row MVP toolbar.

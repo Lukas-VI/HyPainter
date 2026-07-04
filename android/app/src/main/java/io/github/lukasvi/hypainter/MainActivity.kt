@@ -92,6 +92,7 @@ private fun CanvasScreen() {
                         onViewportChanged = { viewport.value = it },
                         onEngineChanged = { version.value++ },
                         onPressure = { latestPressure.value = it },
+                        debugEnabled = debugOverlayVisible.value,
                         onDebugChanged = { debugState.value = it },
                     )
                 },
@@ -325,6 +326,7 @@ private class CanvasInputRouter {
     private var strokeSamples = 0
     private var historySamples = 0
     private var lastLogTime = 0L
+    private var lastPressureReportTime = 0L
 
     fun onMotionEvent(
         event: MotionEvent,
@@ -333,6 +335,7 @@ private class CanvasInputRouter {
         onViewportChanged: (ViewportState) -> Unit,
         onEngineChanged: () -> Unit,
         onPressure: (Float) -> Unit,
+        debugEnabled: Boolean,
         onDebugChanged: (CanvasDebugState) -> Unit,
     ): Boolean {
         val consumed = if (stylusPointerId != null || event.actionPointerIsStylus()) {
@@ -340,7 +343,7 @@ private class CanvasInputRouter {
         } else {
             handleTouchEvent(event, viewport, onViewportChanged)
         }
-        publishDebug(event, viewport, consumed, onDebugChanged)
+        publishDebug(event, viewport, consumed, debugEnabled, onDebugChanged)
         return consumed
     }
 
@@ -360,6 +363,7 @@ private class CanvasInputRouter {
                 stylusPointerId = event.getPointerId(pointerIndex)
                 strokeSamples = 1
                 historySamples = 0
+                lastPressureReportTime = event.eventTime
                 engine.beginStroke(event.toSample(pointerIndex, viewport, historicalIndex = null))
                 onPressure(event.getPressure(pointerIndex).coerceIn(0f, 1f))
                 onEngineChanged()
@@ -367,14 +371,22 @@ private class CanvasInputRouter {
             }
 
             MotionEvent.ACTION_MOVE -> {
-                val pointerIndex = event.findActiveStylusPointerIndex() ?: return true
+                val pointerIndex = event.findActiveStylusPointerIndex()
+                if (pointerIndex == null) {
+                    engine.endStroke()
+                    onEngineChanged()
+                    return true
+                }
                 for (historyIndex in 0 until event.historySize) {
                     engine.appendSample(event.toSample(pointerIndex, viewport, historyIndex))
                 }
                 engine.appendSample(event.toSample(pointerIndex, viewport, historicalIndex = null))
                 historySamples += event.historySize
                 strokeSamples += event.historySize + 1
-                onPressure(event.getPressure(pointerIndex).coerceIn(0f, 1f))
+                if (event.eventTime - lastPressureReportTime >= PRESSURE_REPORT_INTERVAL_MS) {
+                    lastPressureReportTime = event.eventTime
+                    onPressure(event.getPressure(pointerIndex).coerceIn(0f, 1f))
+                }
                 onEngineChanged()
                 return true
             }
@@ -467,9 +479,10 @@ private class CanvasInputRouter {
         event: MotionEvent,
         viewport: ViewportState,
         consumed: Boolean,
+        debugEnabled: Boolean,
         onDebugChanged: (CanvasDebugState) -> Unit,
     ) {
-        if (!BuildConfig.DEBUG) {
+        if (!BuildConfig.DEBUG || !debugEnabled) {
             return
         }
 
@@ -656,3 +669,4 @@ private fun Int.actionName(): String {
 
 private const val DEBUG_LOG_TAG = "HyPainterInput"
 private const val DEBUG_LOG_INTERVAL_MS = 250L
+private const val PRESSURE_REPORT_INTERVAL_MS = 80L

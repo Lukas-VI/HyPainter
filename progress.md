@@ -480,3 +480,19 @@
 - 这次针对频繁点击按钮造成的主线程卡顿，将 PNG 压缩、项目文件 I/O、项目解析等移出点击回调主线程。
 - 当前仍是 MVP 级异步处理；后续应给 engine 增加正式任务队列或读写锁，避免后台导出/加载和绘制输入并发访问同一 engine 状态。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `MainActivity.kt` 本轮修改。
+
+## 2026-07-05 - Task: 为后台工具栏任务增加 engine 并发访问保护
+
+### What was done
+- 工具栏重 I/O 任务 busy 期间，画布 pointer 事件直接消费并忽略，避免手写输入同时修改 engine。
+- Export、Share、Save、Load 运行中禁用 Clear、Undo、Brush、Size、Layer Select、Layer Visibility 等所有 engine 变更按钮。
+- Debug chip 保持可用，便于观察 busy 时输入是否被屏蔽。
+
+### Testing
+- `.\gradlew.bat :android:app:testDebugUnitTest`：通过。
+- `.\gradlew.bat :android:app:assembleDebug`：通过。
+
+### Notes
+- 这是异步化后的保守 MVP 并发策略：后台任务运行时暂停绘制和模型变更，避免主线程等待锁或后台任务读写半更新状态。
+- 后续更完整方案应使用 engine 单线程任务队列、snapshot copy 或读写锁，使导出可与绘制更细粒度地并行。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `MainActivity.kt` 与 progress 本轮修改。

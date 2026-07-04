@@ -109,6 +109,9 @@ private fun CanvasScreen() {
             modifier = Modifier
                 .fillMaxSize()
                 .pointerInteropFilter { event ->
+                    if (toolbarBusy.value) {
+                        return@pointerInteropFilter true
+                    }
                     inputRouter.onMotionEvent(
                         event = event,
                         viewport = viewport.value,
@@ -174,8 +177,8 @@ private fun CanvasScreen() {
 }
 
 @Composable
-private fun BrushChip(label: String, onClick: () -> Unit) {
-    AssistChip(onClick = onClick, label = { Text(label) })
+private fun BrushChip(label: String, enabled: Boolean = true, onClick: () -> Unit) {
+    AssistChip(onClick = onClick, enabled = enabled, label = { Text(label) })
 }
 
 @Composable
@@ -202,6 +205,7 @@ private fun CanvasToolbar(
                 engine.clear()
                 onModelChanged()
             },
+            enabled = !toolbarBusy,
             label = { Text("Clear") },
         )
         Box(modifier = Modifier.size(8.dp))
@@ -210,6 +214,7 @@ private fun CanvasToolbar(
                 engine.undo()
                 onModelChanged()
             },
+            enabled = !toolbarBusy,
             label = { Text("Undo") },
         )
         Box(modifier = Modifier.size(8.dp))
@@ -224,17 +229,17 @@ private fun CanvasToolbar(
             },
         )
         Box(modifier = Modifier.size(8.dp))
-        BrushChip("Black") {
+        BrushChip("Black", enabled = !toolbarBusy) {
             engine.setBrush(snapshot.brush.copy(colorArgb = 0xff000000.toInt()))
             onModelChanged()
         }
         Box(modifier = Modifier.size(8.dp))
-        BrushChip("Red") {
+        BrushChip("Red", enabled = !toolbarBusy) {
             engine.setBrush(snapshot.brush.copy(colorArgb = 0xffd72638.toInt()))
             onModelChanged()
         }
         Box(modifier = Modifier.size(8.dp))
-        BrushChip("Blue") {
+        BrushChip("Blue", enabled = !toolbarBusy) {
             engine.setBrush(snapshot.brush.copy(colorArgb = 0xff2563eb.toInt()))
             onModelChanged()
         }
@@ -244,6 +249,7 @@ private fun CanvasToolbar(
                 engine.setBrush(snapshot.brush.copy(radiusPx = (snapshot.brush.radiusPx - 2f).coerceAtLeast(2f)))
                 onModelChanged()
             },
+            enabled = !toolbarBusy,
             label = { Text("-") },
         )
         Box(modifier = Modifier.size(8.dp))
@@ -252,6 +258,7 @@ private fun CanvasToolbar(
                 engine.setBrush(snapshot.brush.copy(radiusPx = (snapshot.brush.radiusPx + 2f).coerceAtMost(48f)))
                 onModelChanged()
             },
+            enabled = !toolbarBusy,
             label = { Text("Size ${snapshot.brush.radiusPx.toInt()}") },
         )
         Box(modifier = Modifier.size(8.dp))
@@ -352,6 +359,7 @@ private fun CanvasToolbar(
                 engine.addLayer()
                 onModelChanged()
             },
+            enabled = !toolbarBusy,
             label = { Text("+ Layer") },
         )
         snapshot.layers.forEach { layer ->
@@ -361,6 +369,7 @@ private fun CanvasToolbar(
                     engine.selectLayer(layer.id)
                     onModelChanged()
                 },
+                enabled = !toolbarBusy,
                 label = {
                     Text(
                         "${if (layer.id == snapshot.activeLayerId) "*" else ""}${layer.name}",
@@ -373,6 +382,7 @@ private fun CanvasToolbar(
                     engine.toggleLayerVisibility(layer.id)
                     onModelChanged()
                 },
+                enabled = !toolbarBusy,
                 label = { Text(if (layer.visible) "Hide" else "Show") },
             )
         }

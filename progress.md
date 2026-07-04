@@ -293,3 +293,18 @@
 - 这次修复针对真机常见的混合事件序列：掌触、先 finger 再 stylus、pointer index 变化和厂商事件取消。
 - 仍需用平板验证 overlay 中 route 在笔画期间保持 stylus，不会跳到 two-finger 或 single-finger。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `MainActivity.kt` 与 progress 本轮修改。
+
+## 2026-07-05 - Task: 修正 Native active stroke 预览图层一致性
+
+### What was done
+- 修正 `NativePaintingEngine.snapshot()`，active stroke preview 会按 native engine 当前 `activeLayerId` 重标记。
+- 避免 Kotlin fallback preview 在 `clear()` 后回到 Layer 1，导致 native 模式下绘制中预览 stroke 的 layer id 与最终提交 layer id 不一致。
+
+### Testing
+- `.\gradlew.bat :android:app:testDebugUnitTest`：通过。
+- `.\gradlew.bat :android:app:assembleDebug`：通过。
+
+### Notes
+- 这是图层/预览一致性修复，避免后续图层显隐、选择与预览行为继续分叉。
+- 当前仍需要更完整的 engine 层测试，尤其是 native bridge 在真实设备上的图层与预览一致性。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `NativePaintingEngine.kt` 与 progress 本轮修改。

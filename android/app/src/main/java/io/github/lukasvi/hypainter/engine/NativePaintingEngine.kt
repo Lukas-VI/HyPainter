@@ -141,7 +141,7 @@ class NativePaintingEngine private constructor(
             layers = layers.toList(),
             activeLayerId = activeLayerId,
             committedStrokes = committedStrokes.toList(),
-            activeStroke = preview.activeStroke,
+            activeStroke = preview.activeStroke?.copy(layerId = activeLayerId),
             renderedImage = renderedImage,
         )
     }

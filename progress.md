@@ -664,3 +664,20 @@
 ### Notes
 - 这次修正了上一轮定时恢复模型：UI 不再靠固定 1.2 秒恢复，而是由 stylus hover/离开 UI 这两个输入语义驱动，更符合板绘应用里“笔靠近工具才参与 UI”的预期。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，删除 `StylusControlsHider.kt`、`StylusControlsHiderTest.kt`，并还原 `MainActivity.kt` 和 progress 本轮修改。
+
+## 2026-07-05 - Task: 允许 hover 后用笔点击 UI
+
+### What was done
+- `StylusControlsHider` 增加 hover-armed 状态：stylus hover 到 controls 上会显示 UI 并允许随后的 stylus press 交给 UI 控件处理。
+- 未经过 hover 的 stylus press 进入 controls 仍会隐藏 UI，用于区分“从画布按压扫进 UI”和“悬停后主动点 UI”。
+- Stylus 离开 controls 区域会立即显示 UI 并清除 hover armed 状态。
+- Canvas、顶部工具栏和右上 Debug chip 都接入同一规则；Debug overlay 保持左下角。
+- 扩展 `StylusControlsHiderTest`，覆盖 hover 后按压允许、未 hover 按压隐藏、离开 UI 后重新要求 hover。
+
+### Testing
+- `.\gradlew.bat :android:app:testDebugUnitTest`：通过。
+- `.\gradlew.bat :android:app:assembleDebug --stacktrace`：通过。
+
+### Notes
+- 这次修复上一轮的关键边界：如果笔已经 hover 在 UI 上，再按下应该是明确的 UI 操作，而不是继续隐藏控件。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `StylusControlsHider.kt`、`StylusControlsHiderTest.kt`、`MainActivity.kt` 和 progress 本轮修改。

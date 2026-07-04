@@ -85,6 +85,7 @@ private fun CanvasScreen() {
     val projectStatus = remember { mutableStateOf<String?>(null) }
     val toolbarBusy = remember { mutableStateOf(false) }
     val toolbarBounds = remember { mutableStateOf<Rect?>(null) }
+    val debugChipBounds = remember { mutableStateOf<Rect?>(null) }
     var controlsHiddenForStylus by remember { mutableStateOf(false) }
     val debugOverlayVisible = remember { mutableStateOf(false) }
     val debugState = remember { mutableStateOf(CanvasDebugState()) }
@@ -113,8 +114,13 @@ private fun CanvasScreen() {
         controlsHiddenForStylus = controlsHider.hidden
         Unit
     }
-    val showControlsForStylus = {
-        controlsHider.showForHover()
+    val showControlsForStylusHover = {
+        controlsHider.showForHoverInControls()
+        controlsHiddenForStylus = controlsHider.hidden
+        Unit
+    }
+    val showControlsForStylusLeave = {
+        controlsHider.showForLeaveControls()
         controlsHiddenForStylus = controlsHider.hidden
         Unit
     }
@@ -132,10 +138,20 @@ private fun CanvasScreen() {
                         return@pointerInteropFilter true
                     }
                     if (event.hasStylusOrEraserPointer()) {
-                        val insideToolbar = toolbarBounds.value?.let { event.isInside(it) } == true
-                        if (event.isStylusHoverEvent() || !insideToolbar) {
-                            showControlsForStylus()
-                        } else if (!controlsHiddenForStylus && event.isStylusPressEvent() && insideToolbar) {
+                        val insideControls = event.isInsideAny(toolbarBounds.value, debugChipBounds.value)
+                        if (event.isStylusHoverEvent()) {
+                            if (insideControls) {
+                                showControlsForStylusHover()
+                            } else {
+                                showControlsForStylusLeave()
+                            }
+                        } else if (!insideControls) {
+                            showControlsForStylusLeave()
+                        } else if (
+                            !controlsHiddenForStylus &&
+                            event.isStylusPressEvent() &&
+                            controlsHider.shouldHidePressInControls()
+                        ) {
                             hideControlsForStylus()
                             return@pointerInteropFilter true
                         }
@@ -195,7 +211,10 @@ private fun CanvasScreen() {
                         toolbarBounds.value = coordinates.boundsInRoot()
                     }
                     .pointerInteropFilter { event ->
-                        if (event.hasStylusOrEraserPointer()) {
+                        if (event.isStylusHoverEvent()) {
+                            showControlsForStylusHover()
+                            false
+                        } else if (event.isStylusPressEvent() && controlsHider.shouldHidePressInControls()) {
                             hideControlsForStylus()
                             true
                         } else {
@@ -223,14 +242,17 @@ private fun CanvasScreen() {
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(16.dp)
+                    .onGloballyPositioned { coordinates ->
+                        debugChipBounds.value = coordinates.boundsInRoot()
+                    }
                     .pointerInteropFilter { event ->
-                        if (event.isStylusPressEvent()) {
+                        if (event.isStylusHoverEvent()) {
+                            showControlsForStylusHover()
+                            false
+                        } else if (event.isStylusPressEvent() && controlsHider.shouldHidePressInControls()) {
                             hideControlsForStylus()
                             true
                         } else {
-                            if (event.isStylusHoverEvent()) {
-                                showControlsForStylus()
-                            }
                             false
                         }
                     },
@@ -542,6 +564,15 @@ private fun MotionEvent.isInside(bounds: Rect): Boolean {
             if (x >= bounds.left && x <= bounds.right && y >= bounds.top && y <= bounds.bottom) {
                 return true
             }
+        }
+    }
+    return false
+}
+
+private fun MotionEvent.isInsideAny(vararg bounds: Rect?): Boolean {
+    for (bound in bounds) {
+        if (bound != null && isInside(bound)) {
+            return true
         }
     }
     return false

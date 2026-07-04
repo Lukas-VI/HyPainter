@@ -19,7 +19,7 @@ class StylusControlsHiderTest {
         val hider = StylusControlsHider()
         hider.hideUntilHover()
 
-        hider.showForHover()
+        hider.showForHoverInControls()
 
         assertFalse(hider.hidden)
     }
@@ -29,8 +29,34 @@ class StylusControlsHiderTest {
         val hider = StylusControlsHider()
         hider.hideUntilHover()
 
-        hider.showForHover()
+        hider.showForLeaveControls()
 
         assertFalse(hider.hidden)
+    }
+
+    @Test
+    fun pressInControlsWithoutHoverHides() {
+        val hider = StylusControlsHider()
+
+        assertTrue(hider.shouldHidePressInControls())
+    }
+
+    @Test
+    fun pressInControlsAfterHoverIsAllowed() {
+        val hider = StylusControlsHider()
+
+        hider.showForHoverInControls()
+
+        assertFalse(hider.shouldHidePressInControls())
+    }
+
+    @Test
+    fun leavingControlsDisarmsHoverPress() {
+        val hider = StylusControlsHider()
+        hider.showForHoverInControls()
+
+        hider.showForLeaveControls()
+
+        assertTrue(hider.shouldHidePressInControls())
     }
 }

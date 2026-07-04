@@ -22,6 +22,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -43,6 +44,9 @@ import io.github.lukasvi.hypainter.input.CanvasInputRouter
 import io.github.lukasvi.hypainter.render.CanvasRenderOptions
 import io.github.lukasvi.hypainter.render.toFilterQuality
 import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -73,8 +77,10 @@ private fun CanvasScreen() {
     val latestPressure = remember { mutableStateOf(0f) }
     val exportStatus = remember { mutableStateOf<String?>(null) }
     val projectStatus = remember { mutableStateOf<String?>(null) }
+    val toolbarBusy = remember { mutableStateOf(false) }
     val debugOverlayVisible = remember { mutableStateOf(false) }
     val debugState = remember { mutableStateOf(CanvasDebugState()) }
+    val coroutineScope = rememberCoroutineScope()
     val inputRouter = remember { CanvasInputRouter() }
     val renderOptions = remember { CanvasRenderOptions() }
     val frameInvalidator = remember(view) {
@@ -144,11 +150,14 @@ private fun CanvasScreen() {
             latestPressure = latestPressure.value,
             exportStatus = exportStatus.value,
             projectStatus = projectStatus.value,
+            toolbarBusy = toolbarBusy.value,
             debugOverlayVisible = debugOverlayVisible.value,
             onExportStatusChanged = { exportStatus.value = it },
             onProjectStatusChanged = { projectStatus.value = it },
             onDebugOverlayChanged = { debugOverlayVisible.value = it },
+            onToolbarBusyChanged = { toolbarBusy.value = it },
             onModelChanged = refreshModel,
+            launchBackground = { block -> coroutineScope.launch { block() } },
         )
 
         if (BuildConfig.DEBUG && debugOverlayVisible.value) {
@@ -178,11 +187,14 @@ private fun CanvasToolbar(
     latestPressure: Float,
     exportStatus: String?,
     projectStatus: String?,
+    toolbarBusy: Boolean,
     debugOverlayVisible: Boolean,
     onExportStatusChanged: (String) -> Unit,
     onProjectStatusChanged: (String) -> Unit,
     onDebugOverlayChanged: (Boolean) -> Unit,
+    onToolbarBusyChanged: (Boolean) -> Unit,
     onModelChanged: () -> Unit,
+    launchBackground: (suspend () -> Unit) -> Unit,
 ) {
     Row(modifier = modifier) {
         AssistChip(
@@ -246,54 +258,92 @@ private fun CanvasToolbar(
         AssistChip(
             onClick = {
                 val output = File(context.filesDir, "hypainter-export.png")
-                onExportStatusChanged(if (engine.exportPng(output.absolutePath)) "Exported" else "Export failed")
+                runToolbarIo(
+                    busy = toolbarBusy,
+                    setBusy = onToolbarBusyChanged,
+                    launchBackground = launchBackground,
+                    onStart = { onExportStatusChanged("Exporting") },
+                    block = { engine.exportPng(output.absolutePath) },
+                    onResult = { ok -> onExportStatusChanged(if (ok) "Exported" else "Export failed") },
+                    onError = { onExportStatusChanged("Export failed") },
+                )
             },
+            enabled = !toolbarBusy,
             label = { Text(exportStatus ?: "Export") },
         )
         Box(modifier = Modifier.size(8.dp))
         AssistChip(
             onClick = {
                 val output = File(context.filesDir, "hypainter-export.png")
-                if (engine.exportPng(output.absolutePath)) {
-                    val uri = FileProvider.getUriForFile(
-                        context,
-                        "${context.packageName}.fileprovider",
-                        output,
-                    )
-                    val share = Intent(Intent.ACTION_SEND).apply {
-                        type = "image/png"
-                        putExtra(Intent.EXTRA_STREAM, uri)
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }
-                    context.startActivity(Intent.createChooser(share, "Share HyPainter export"))
-                    onExportStatusChanged("Shared")
-                } else {
-                    onExportStatusChanged("Share failed")
-                }
+                runToolbarIo(
+                    busy = toolbarBusy,
+                    setBusy = onToolbarBusyChanged,
+                    launchBackground = launchBackground,
+                    onStart = { onExportStatusChanged("Sharing") },
+                    block = { engine.exportPng(output.absolutePath) },
+                    onResult = { ok ->
+                        if (ok) {
+                            val uri = FileProvider.getUriForFile(
+                                context,
+                                "${context.packageName}.fileprovider",
+                                output,
+                            )
+                            val share = Intent(Intent.ACTION_SEND).apply {
+                                type = "image/png"
+                                putExtra(Intent.EXTRA_STREAM, uri)
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+                            context.startActivity(Intent.createChooser(share, "Share HyPainter export"))
+                            onExportStatusChanged("Shared")
+                        } else {
+                            onExportStatusChanged("Share failed")
+                        }
+                    },
+                    onError = { onExportStatusChanged("Share failed") },
+                )
             },
+            enabled = !toolbarBusy,
             label = { Text("Share") },
         )
         Box(modifier = Modifier.size(8.dp))
         AssistChip(
             onClick = {
                 val output = File(context.filesDir, "hypainter-project.hyp")
-                onProjectStatusChanged(if (engine.saveProject(output.absolutePath)) "Saved" else "Save failed")
+                runToolbarIo(
+                    busy = toolbarBusy,
+                    setBusy = onToolbarBusyChanged,
+                    launchBackground = launchBackground,
+                    onStart = { onProjectStatusChanged("Saving") },
+                    block = { engine.saveProject(output.absolutePath) },
+                    onResult = { ok -> onProjectStatusChanged(if (ok) "Saved" else "Save failed") },
+                    onError = { onProjectStatusChanged("Save failed") },
+                )
             },
+            enabled = !toolbarBusy,
             label = { Text(projectStatus ?: "Save") },
         )
         Box(modifier = Modifier.size(8.dp))
         AssistChip(
             onClick = {
                 val input = File(context.filesDir, "hypainter-project.hyp")
-                onProjectStatusChanged(
-                    if (engine.loadProject(input.absolutePath)) {
-                        onModelChanged()
-                        "Loaded"
-                    } else {
-                        "Load failed"
+                runToolbarIo(
+                    busy = toolbarBusy,
+                    setBusy = onToolbarBusyChanged,
+                    launchBackground = launchBackground,
+                    onStart = { onProjectStatusChanged("Loading") },
+                    block = { engine.loadProject(input.absolutePath) },
+                    onResult = { ok ->
+                        if (ok) {
+                            onModelChanged()
+                            onProjectStatusChanged("Loaded")
+                        } else {
+                            onProjectStatusChanged("Load failed")
+                        }
                     },
+                    onError = { onProjectStatusChanged("Load failed") },
                 )
             },
+            enabled = !toolbarBusy,
             label = { Text("Load") },
         )
         Box(modifier = Modifier.size(8.dp))
@@ -333,6 +383,34 @@ private fun CanvasToolbar(
                 label = { Text(if (debugOverlayVisible) "Debug On" else "Debug") },
             )
         }
+    }
+}
+
+private fun <T> runToolbarIo(
+    busy: Boolean,
+    setBusy: (Boolean) -> Unit,
+    launchBackground: (suspend () -> Unit) -> Unit,
+    onStart: () -> Unit,
+    block: () -> T,
+    onResult: (T) -> Unit,
+    onError: (Throwable) -> Unit,
+) {
+    if (busy) {
+        return
+    }
+    setBusy(true)
+    onStart()
+    launchBackground {
+        val result = runCatching {
+            withContext(Dispatchers.IO) {
+                block()
+            }
+        }
+        setBusy(false)
+        result.fold(
+            onSuccess = onResult,
+            onFailure = onError,
+        )
     }
 }
 

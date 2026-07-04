@@ -463,3 +463,20 @@
 - 目前只接入默认策略，UI 选择器后续可直接绑定 `BitmapSampling`。
 - Compose `FilterQuality` 不直接暴露“线性/双线性”的严格命名，本轮先将 Linear/Bilinear 映射到中等过滤质量，Bicubic 映射到高质量过滤。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，删除 `render/BitmapSampling.kt` 并恢复 `drawImage(image)`。
+
+## 2026-07-05 - Task: 将工具栏重 I/O 操作移出主线程
+
+### What was done
+- Export、Share、Save 和 Load 通过 `rememberCoroutineScope` 启动后台任务，并在 `Dispatchers.IO` 中执行 engine/file 工作。
+- 工具栏新增 busy 状态，重 I/O 运行时禁用 Export/Share/Save/Load，避免连续点击堆积任务。
+- 操作开始、成功、失败状态仍回主线程更新；Share 的 Android chooser 仍在主线程启动。
+- 后台任务异常时会恢复 busy 状态并显示失败，避免按钮永久卡住。
+
+### Testing
+- `.\gradlew.bat :android:app:testDebugUnitTest`：通过。
+- `.\gradlew.bat :android:app:assembleDebug`：通过。
+
+### Notes
+- 这次针对频繁点击按钮造成的主线程卡顿，将 PNG 压缩、项目文件 I/O、项目解析等移出点击回调主线程。
+- 当前仍是 MVP 级异步处理；后续应给 engine 增加正式任务队列或读写锁，避免后台导出/加载和绘制输入并发访问同一 engine 状态。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `MainActivity.kt` 本轮修改。

@@ -354,3 +354,16 @@
 ### Notes
 - 这是上一轮降低预览复制开销后发现的数据正确性边界：预览可以共享 live list，但提交历史必须稳定复制。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，删除 `StrokeSnapshots.kt`、`StrokeSnapshotsTest.kt` 并还原 `NativePaintingEngine.kt`。
+
+## 2026-07-05 - Task: 审计 Compose 绘制变换与 viewport 数学一致性
+
+### What was done
+- 复核画布绘制变换顺序，当前 `translate -> rotate -> scale` 与 `ViewportState.toScreen()` 的 `pan + rotate(canvas * scale)` 模型一致。
+- 在 `withTransformCompat()` 添加注释，防止后续调整 draw transform 顺序时破坏 screen/canvas 映射不变量。
+
+### Testing
+- 本轮是注释与审计记录更新，依赖上一轮 `CanvasViewportTest` 约束 viewport 数学；未改变运行逻辑。
+
+### Notes
+- 若后续改用 `graphicsLayer` 或矩阵绘制，需要重新验证绘制矩阵与 `toCanvas()` 逆变换仍然一致。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `MainActivity.kt` 与 progress 本轮修改。

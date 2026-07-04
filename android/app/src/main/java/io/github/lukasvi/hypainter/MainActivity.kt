@@ -590,6 +590,7 @@ private fun DrawScope.withTransformCompat(
     block: DrawScope.() -> Unit,
 ) {
     withTransform({
+        // Keep this order aligned with ViewportState.toScreen(): pan + rotate(canvas * scale).
         translate(viewport.pan.x, viewport.pan.y)
         rotate(viewport.rotation, pivot = Offset.Zero)
         scale(viewport.scale, viewport.scale, pivot = Offset.Zero)

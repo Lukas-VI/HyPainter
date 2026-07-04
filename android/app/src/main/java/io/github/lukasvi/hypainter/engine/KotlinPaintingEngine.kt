@@ -42,7 +42,9 @@ class KotlinPaintingEngine(
         if (activeStroke.isNotEmpty()) {
             val stroke = EngineStroke(activeStroke.toList(), brush, activeLayerId)
             committedStrokes.add(stroke)
-            displayCache.append(stroke, layers)
+            mergeActiveCacheInto(displayCache, activeLayerId, layers).takeIf { !it }?.let {
+                displayCache.append(stroke, layers)
+            }
             activeStroke = mutableListOf()
             activeCache.clear()
         }
@@ -144,6 +146,14 @@ class KotlinPaintingEngine(
             renderedImage = displayCache.renderedImage,
             activeImage = activeCache.renderedImage,
         )
+    }
+
+    internal fun mergeActiveCacheInto(
+        target: StrokeRasterCache,
+        layerId: Long,
+        layers: List<EngineLayer>,
+    ): Boolean {
+        return target.mergeFrom(activeCache, layerId, layers)
     }
 
     private fun renderBitmap(): Bitmap {

@@ -599,3 +599,21 @@
 ### Notes
 - 用户提供的 MIUIInput 日志只能证明系统窗口收到 DOWN/UP/MOVE 摘要，不能证明 tool type、HyPainter route、历史样本和 canvas 映射；后续首段缺失需抓 `HyPainterInput`。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `debug/*`、`CanvasInputRouter.kt` 和 progress 本轮修改。
+
+## 2026-07-05 - Task: 降低抬笔提交路径阻塞
+
+### What was done
+- 分析真机 `HyPainterInput` 日志，确认典型笔画的 MOVE 处理约 0.6-0.7ms，但 `ACTION_UP` 达到 57ms，主要风险集中在抬笔提交。
+- `StrokeRasterCache` 增加 active cache 合并能力，提交时可直接把活动笔画 bitmap 合并到 committed display cache，避免在 UI 线程重新遍历整条 stroke 绘制。
+- Kotlin fallback 和 Native engine 抬笔时优先合并 active cache，只有缺少 active cache 时才回退 vector stroke replay。
+- Native engine 不再在 `endStroke()` 同步调用 Rust `nativeAppendStroke()` rasterize；Rust 文档改为导出/分享需要 bitmap 时按 committed history 重建，避免输入路径被 native rasterization 阻塞。
+- Debug action 名称补充 `hover-enter`、`hover-move`、`hover-exit`，避免真机日志出现 `action-9/7/10` 难以判读。
+
+### Testing
+- `.\gradlew.bat :android:app:testDebugUnitTest`：通过。
+- `.\gradlew.bat :android:app:assembleDebug --stacktrace`：通过。
+
+### Notes
+- 这次针对用户日志中的 `up handleMs=57.25`，目标是让抬笔不再阻塞后续 hover/下一笔输入。
+- 导出/分享仍可能触发 Rust 文档重建和 PNG 压缩，但这些操作已经在 toolbar IO 路径中，不应参与 stylus MOVE/UP 热路径。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `StrokeRasterCache.kt`、engine、debug format 和 progress 本轮修改。

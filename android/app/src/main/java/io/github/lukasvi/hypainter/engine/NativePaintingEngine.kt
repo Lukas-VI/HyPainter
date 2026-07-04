@@ -33,28 +33,17 @@ class NativePaintingEngine private constructor(
     override fun endStroke() {
         val stroke = fallbackPreview.snapshot().activeStroke ?: return
         val committedStroke = stroke.stableCopyForLayer(activeLayerId)
-        val samples = FloatArray(committedStroke.points.size * SAMPLE_STRIDE)
-        committedStroke.points.forEachIndexed { index, sample ->
-            val offset = index * SAMPLE_STRIDE
-            samples[offset] = sample.position.x
-            samples[offset + 1] = sample.position.y
-            samples[offset + 2] = sample.pressure
-            samples[offset + 3] = sample.tiltX
-            samples[offset + 4] = sample.tiltY
-            samples[offset + 5] = sample.timestamp.toFloat()
-        }
-        nativeAppendStroke(handle, samples)
         committedStrokes.add(committedStroke)
-        displayCache.append(committedStroke, layers)
+        fallbackPreview.mergeActiveCacheInto(displayCache, activeLayerId, layers).takeIf { !it }?.let {
+            displayCache.append(committedStroke, layers)
+        }
         fallbackPreview.clear()
         markRenderedBitmapDirty()
     }
 
     override fun undo() {
-        if (nativeUndo(handle)) {
-            if (committedStrokes.isNotEmpty()) {
-                committedStrokes.removeAt(committedStrokes.lastIndex)
-            }
+        if (committedStrokes.isNotEmpty()) {
+            committedStrokes.removeAt(committedStrokes.lastIndex)
             displayCache.rebuild(committedStrokes, layers)
             markRenderedBitmapDirty()
         }
@@ -91,7 +80,7 @@ class NativePaintingEngine private constructor(
             val layer = layers[index]
             layers[index] = layer.copy(visible = !layer.visible)
             displayCache.rebuild(committedStrokes, layers)
-            rebuildNativeDocument()
+            markRenderedBitmapDirty()
         }
     }
 
@@ -133,7 +122,7 @@ class NativePaintingEngine private constructor(
             committedStrokes.add(stroke)
         }
         displayCache.rebuild(committedStrokes, layers)
-        rebuildNativeDocument()
+        markRenderedBitmapDirty()
         return true
     }
 
@@ -179,6 +168,7 @@ class NativePaintingEngine private constructor(
 
     private fun ensureRenderedBitmap(): Bitmap? {
         if (renderedBitmap == null || renderedBitmapDirty) {
+            rebuildNativeDocument()
             refreshRenderedImage()
         }
         return renderedBitmap

@@ -32,6 +32,9 @@ internal fun Int.actionName(): String {
         MotionEvent.ACTION_CANCEL -> "cancel"
         MotionEvent.ACTION_POINTER_DOWN -> "pointer-down"
         MotionEvent.ACTION_POINTER_UP -> "pointer-up"
+        MotionEvent.ACTION_HOVER_ENTER -> "hover-enter"
+        MotionEvent.ACTION_HOVER_MOVE -> "hover-move"
+        MotionEvent.ACTION_HOVER_EXIT -> "hover-exit"
         else -> "action-$this"
     }
 }

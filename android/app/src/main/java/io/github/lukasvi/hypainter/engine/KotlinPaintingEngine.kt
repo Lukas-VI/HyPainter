@@ -110,7 +110,7 @@ class KotlinPaintingEngine(
             activeLayerId = activeLayerId,
             committedStrokes = committedStrokes.toList(),
             activeStroke = activeStroke.takeIf { it.isNotEmpty() }?.let {
-                EngineStroke(it.toList(), brush, activeLayerId)
+                EngineStroke(it, brush, activeLayerId)
             },
         )
     }
@@ -138,7 +138,9 @@ class KotlinPaintingEngine(
             strokeCap = Paint.Cap.ROUND
         }
 
-        stroke.points.zipWithNext().forEach { (from, to) ->
+        for (index in 1 until stroke.points.size) {
+            val from = stroke.points[index - 1]
+            val to = stroke.points[index]
             paint.alpha = ((to.pressure.coerceIn(0.1f, 1f)) * 255).toInt()
             canvas.drawLine(
                 from.position.x,

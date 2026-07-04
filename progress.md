@@ -308,3 +308,18 @@
 - 这是图层/预览一致性修复，避免后续图层显隐、选择与预览行为继续分叉。
 - 当前仍需要更完整的 engine 层测试，尤其是 native bridge 在真实设备上的图层与预览一致性。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `NativePaintingEngine.kt` 与 progress 本轮修改。
+
+## 2026-07-05 - Task: 降低长笔画预览的分配压力
+
+### What was done
+- `KotlinPaintingEngine.snapshot()` 的 active stroke preview 不再每帧 `toList()` 复制点列表，减少长笔画期间随点数增长的重复分配。
+- Compose `drawStroke()` 与 Kotlin bitmap `drawStroke()` 从 `zipWithNext()` 改为 index loop，减少每帧绘制 active stroke 时的 Pair/Iterable 临时对象。
+
+### Testing
+- `.\gradlew.bat :android:app:testDebugUnitTest`：通过。
+- `.\gradlew.bat :android:app:assembleDebug`：通过。
+
+### Notes
+- 这次继续针对长时间 stylus 绘制卡顿路径，减少 frame-throttled preview 内仍会发生的 O(n) 列表复制和绘制分配。
+- active stroke 仍在主线程输入/绘制路径使用，当前没有并发访问；若未来引入后台渲染，需要重新评估 snapshot 的不可变边界。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，恢复 active stroke `toList()` 和 `zipWithNext()` 绘制。

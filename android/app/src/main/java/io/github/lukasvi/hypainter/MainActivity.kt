@@ -572,7 +572,9 @@ private fun DrawScope.drawCanvasBackground(width: Int, height: Int) {
 }
 
 private fun DrawScope.drawStroke(stroke: EngineStroke) {
-    stroke.points.zipWithNext().forEach { (from, to) ->
+    for (index in 1 until stroke.points.size) {
+        val from = stroke.points[index - 1]
+        val to = stroke.points[index]
         drawLine(
             color = Color(stroke.brush.colorArgb).copy(alpha = to.pressure.coerceIn(0.1f, 1f)),
             start = from.position,

@@ -88,7 +88,7 @@ private fun CanvasScreen() {
             canvasVersion.value++
         }
     }
-    val snapshot = remember(canvasVersion.value) { engine.snapshot() }
+    val snapshot = remember(canvasVersion.value) { engine.canvasSnapshot() }
     val toolbarSnapshot = remember(modelVersion.value) { engine.snapshot() }
     val refreshCanvas = {
         canvasVersion.value++
@@ -134,10 +134,12 @@ private fun CanvasScreen() {
                         filterQuality = renderOptions.bitmapSampling.toFilterQuality(),
                     )
                 }
-                for (index in snapshot.committedStrokes.indices) {
-                    val stroke = snapshot.committedStrokes[index]
-                    if (snapshot.layerIsVisible(stroke.layerId)) {
-                        drawStroke(stroke)
+                if (snapshot.renderedImage == null) {
+                    for (index in snapshot.committedStrokes.indices) {
+                        val stroke = snapshot.committedStrokes[index]
+                        if (snapshot.layerIsVisible(stroke.layerId)) {
+                            drawStroke(stroke)
+                        }
                     }
                 }
                 snapshot.activeStroke?.let { stroke ->

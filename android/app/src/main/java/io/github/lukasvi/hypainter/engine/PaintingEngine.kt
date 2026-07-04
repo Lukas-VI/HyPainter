@@ -31,6 +31,9 @@ interface PaintingEngine {
     fun loadProject(path: String): Boolean
 
     fun snapshot(): EngineSnapshot
+
+    // Drawing-only snapshot; implementations should prefer raster caches over replaying stroke history.
+    fun canvasSnapshot(): EngineSnapshot = snapshot()
 }
 
 data class EngineSample(
@@ -70,5 +73,5 @@ data class EngineSnapshot(
 )
 
 fun createPaintingEngine(width: Int = 1024, height: Int = 1024): PaintingEngine {
-    return NativePaintingEngine.createOrNull(width, height) ?: KotlinPaintingEngine()
+    return NativePaintingEngine.createOrNull(width, height) ?: KotlinPaintingEngine(width, height)
 }

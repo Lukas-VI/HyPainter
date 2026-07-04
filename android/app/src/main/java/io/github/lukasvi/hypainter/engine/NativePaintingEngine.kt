@@ -3,8 +3,6 @@ package io.github.lukasvi.hypainter.engine
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color as AndroidColor
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import java.io.FileOutputStream
 
 class NativePaintingEngine private constructor(
@@ -15,7 +13,7 @@ class NativePaintingEngine private constructor(
     override val nativeBacked: Boolean = true
 
     private val fallbackPreview = KotlinPaintingEngine(canvasWidth, canvasHeight)
-    private var renderedImage: ImageBitmap? = null
+    private val displayCache = StrokeRasterCache(canvasWidth, canvasHeight)
     private var renderedBitmap: Bitmap? = null
     private var renderedBitmapDirty = false
     private var brush = EngineBrush(colorArgb = AndroidColor.BLACK, radiusPx = 8f)
@@ -47,6 +45,7 @@ class NativePaintingEngine private constructor(
         }
         nativeAppendStroke(handle, samples)
         committedStrokes.add(committedStroke)
+        displayCache.append(committedStroke, layers)
         fallbackPreview.clear()
         markRenderedBitmapDirty()
     }
@@ -56,6 +55,7 @@ class NativePaintingEngine private constructor(
             if (committedStrokes.isNotEmpty()) {
                 committedStrokes.removeAt(committedStrokes.lastIndex)
             }
+            displayCache.rebuild(committedStrokes, layers)
             markRenderedBitmapDirty()
         }
     }
@@ -64,11 +64,11 @@ class NativePaintingEngine private constructor(
         nativeClear(handle)
         fallbackPreview.clear()
         committedStrokes.clear()
+        displayCache.clear()
         layers.clear()
         layers.add(EngineLayer(id = 1L, name = "Layer 1", visible = true))
         activeLayerId = 1L
         nextLayerId = 2L
-        renderedImage = null
         renderedBitmap = null
         renderedBitmapDirty = false
     }
@@ -90,6 +90,7 @@ class NativePaintingEngine private constructor(
         if (index >= 0) {
             val layer = layers[index]
             layers[index] = layer.copy(visible = !layer.visible)
+            displayCache.rebuild(committedStrokes, layers)
             rebuildNativeDocument()
         }
     }
@@ -131,6 +132,7 @@ class NativePaintingEngine private constructor(
         project.strokes.forEach { stroke ->
             committedStrokes.add(stroke)
         }
+        displayCache.rebuild(committedStrokes, layers)
         rebuildNativeDocument()
         return true
     }
@@ -145,7 +147,21 @@ class NativePaintingEngine private constructor(
             activeLayerId = activeLayerId,
             committedStrokes = committedStrokes.toList(),
             activeStroke = preview.activeStroke?.copy(layerId = activeLayerId),
-            renderedImage = renderedImage,
+            renderedImage = displayCache.renderedImage,
+        )
+    }
+
+    override fun canvasSnapshot(): EngineSnapshot {
+        val preview = fallbackPreview.canvasSnapshot()
+        return EngineSnapshot(
+            canvasWidth = canvasWidth,
+            canvasHeight = canvasHeight,
+            brush = brush,
+            layers = layers,
+            activeLayerId = activeLayerId,
+            committedStrokes = emptyList(),
+            activeStroke = preview.activeStroke?.copy(layerId = activeLayerId),
+            renderedImage = displayCache.renderedImage,
         )
     }
 
@@ -156,7 +172,6 @@ class NativePaintingEngine private constructor(
 
     private fun refreshRenderedImage() {
         renderedBitmap = rgbaToBitmap(nativeRenderRgba(handle), canvasWidth, canvasHeight)
-        renderedImage = renderedBitmap?.asImageBitmap()
         renderedBitmapDirty = false
     }
 
@@ -168,7 +183,6 @@ class NativePaintingEngine private constructor(
     }
 
     private fun markRenderedBitmapDirty() {
-        renderedImage = null
         renderedBitmap = null
         renderedBitmapDirty = true
     }

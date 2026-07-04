@@ -16,6 +16,7 @@ class KotlinPaintingEngine(
     private var activeStroke = mutableListOf<EngineSample>()
     private var brush = EngineBrush(colorArgb = AndroidColor.BLACK, radiusPx = 8f)
     private val layers = mutableListOf(EngineLayer(id = 1L, name = "Layer 1", visible = true))
+    private val displayCache = StrokeRasterCache(canvasWidth, canvasHeight)
     private var activeLayerId = 1L
     private var nextLayerId = 2L
 
@@ -34,7 +35,9 @@ class KotlinPaintingEngine(
 
     override fun endStroke() {
         if (activeStroke.isNotEmpty()) {
-            committedStrokes.add(EngineStroke(activeStroke.toList(), brush, activeLayerId))
+            val stroke = EngineStroke(activeStroke.toList(), brush, activeLayerId)
+            committedStrokes.add(stroke)
+            displayCache.append(stroke, layers)
             activeStroke = mutableListOf()
         }
     }
@@ -42,12 +45,14 @@ class KotlinPaintingEngine(
     override fun undo() {
         if (committedStrokes.isNotEmpty()) {
             committedStrokes.removeAt(committedStrokes.lastIndex)
+            displayCache.rebuild(committedStrokes, layers)
         }
     }
 
     override fun clear() {
         committedStrokes.clear()
         activeStroke.clear()
+        displayCache.clear()
         layers.clear()
         layers.add(EngineLayer(id = 1L, name = "Layer 1", visible = true))
         activeLayerId = 1L
@@ -71,6 +76,7 @@ class KotlinPaintingEngine(
         if (index >= 0) {
             val layer = layers[index]
             layers[index] = layer.copy(visible = !layer.visible)
+            displayCache.rebuild(committedStrokes, layers)
         }
     }
 
@@ -98,6 +104,7 @@ class KotlinPaintingEngine(
         activeLayerId = project.activeLayerId
         nextLayerId = (layers.maxOfOrNull { it.id } ?: 0L) + 1L
         committedStrokes.addAll(project.strokes)
+        displayCache.rebuild(committedStrokes, layers)
         return true
     }
 
@@ -112,6 +119,21 @@ class KotlinPaintingEngine(
             activeStroke = activeStroke.takeIf { it.isNotEmpty() }?.let {
                 EngineStroke(it, brush, activeLayerId)
             },
+        )
+    }
+
+    override fun canvasSnapshot(): EngineSnapshot {
+        return EngineSnapshot(
+            canvasWidth = canvasWidth,
+            canvasHeight = canvasHeight,
+            brush = brush,
+            layers = layers,
+            activeLayerId = activeLayerId,
+            committedStrokes = emptyList(),
+            activeStroke = activeStroke.takeIf { it.isNotEmpty() }?.let {
+                EngineStroke(it, brush, activeLayerId)
+            },
+            renderedImage = displayCache.renderedImage,
         )
     }
 

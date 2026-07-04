@@ -512,3 +512,23 @@
 - 这是针对长笔画/高帧率预览的 GC 压力削减，减少每帧小对象和集合分配。
 - 后续图层数量增多后可维护 layer visibility cache，但当前 indexed scan 对 MVP 图层数量更简单。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，恢复 draw path 中的 visible layer set/filter 逻辑。
+
+## 2026-07-05 - Task: 将已提交笔画实时落到显示 bitmap 缓存
+
+### What was done
+- 新增 engine 内部 `StrokeRasterCache`，在笔画提交、撤销、图层显隐和项目加载时维护透明 bitmap 缓存。
+- Kotlin fallback 与 Native engine 的画布 snapshot 现在返回缓存 bitmap + active stroke preview，画布绘制路径不再每帧重放全部 committed strokes。
+- Native engine 继续把 Rust 文档作为导出和长期状态来源，但 UI 显示缓存由 Android 侧实时增量更新，避免抬笔后触发全量 RGBA 大图刷新。
+- `MainActivity` 对有 `renderedImage` 的 snapshot 跳过 committed vector replay，防止缓存与历史笔画双重绘制。
+- 修正 native 不可用回落 Kotlin engine 时未传递自定义画布尺寸的小边界。
+- 复跑用户附件中的 `:android:app:packageDebug` 路径，当前 `assembleDebug` 已通过，未复现 AGP IncrementalSplitter NPE。
+
+### Testing
+- `.\gradlew.bat :android:app:testDebugUnitTest`：通过。
+- `.\gradlew.bat :android:app:assembleDebug --stacktrace`：通过，包含 `:android:app:packageDebug`。
+
+### Notes
+- 这次解决的是“历史笔画越多，画布每帧 replay 越慢”的主路径；active stroke 仍按当前 preview 方式绘制，长单笔极端采样量后续还应进入 tile/dirty-rect 预览。
+- 如果 `packageDebug` NPE 之后再次出现，优先清理 `android/app/build/intermediates` 与 APK outputs，或执行 `.\gradlew.bat clean :android:app:assembleDebug --stacktrace`；本轮代码状态下未复现。
+- 当前仍需真实安卓平板验证：多笔画压力测试下 GC、`Choreographer` skipped frames 和 MIUI input latency 是否明显下降。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，删除 `StrokeRasterCache.kt` 并还原 `MainActivity.kt` 与 engine 本轮修改。

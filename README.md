@@ -61,4 +61,5 @@ Current bridge status:
 - The app has MVP layer controls for adding layers, selecting the active layer, toggling visibility, and persisting layer metadata in drafts.
 - Canvas input is routed by tool type: stylus and eraser strokes have priority, single-finger touches are left for UI/future selection work, and two-finger touch gestures pan, zoom, and rotate around the finger centroid.
 - Screen-to-canvas mapping now accounts for canvas pan, zoom, and rotation so strokes land in the expected document coordinates after viewport changes.
+- Bitmap canvas rendering defaults to pixel-perfect sampling instead of interpolated filtering; render sampling options are modeled for future UI selection.
 - MVP status and verification notes are tracked in `docs/mvp-status.md`.

@@ -40,6 +40,8 @@ import io.github.lukasvi.hypainter.engine.EngineStroke
 import io.github.lukasvi.hypainter.engine.PaintingEngine
 import io.github.lukasvi.hypainter.engine.createPaintingEngine
 import io.github.lukasvi.hypainter.input.CanvasInputRouter
+import io.github.lukasvi.hypainter.render.CanvasRenderOptions
+import io.github.lukasvi.hypainter.render.toFilterQuality
 import java.io.File
 
 class MainActivity : ComponentActivity() {
@@ -74,6 +76,7 @@ private fun CanvasScreen() {
     val debugOverlayVisible = remember { mutableStateOf(false) }
     val debugState = remember { mutableStateOf(CanvasDebugState()) }
     val inputRouter = remember { CanvasInputRouter() }
+    val renderOptions = remember { CanvasRenderOptions() }
     val frameInvalidator = remember(view) {
         FrameInvalidator(view) {
             canvasVersion.value++
@@ -118,7 +121,10 @@ private fun CanvasScreen() {
             withTransformCompat(state) {
                 drawCanvasBackground(snapshot.canvasWidth, snapshot.canvasHeight)
                 snapshot.renderedImage?.let { image ->
-                    drawImage(image)
+                    drawImage(
+                        image = image,
+                        filterQuality = renderOptions.bitmapSampling.toFilterQuality(),
+                    )
                 }
                 snapshot.committedStrokes.filter { it.layerId in visibleLayerIds }.forEach { stroke ->
                     drawStroke(stroke)

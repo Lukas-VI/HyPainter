@@ -446,3 +446,20 @@
 - 指标只在 debug build 且 `Debug` chip 打开时计算，避免影响正常绘制性能基线。
 - 真机排查时先关 Debug 测 GC/Choreographer，再短暂打开 Debug 区分事件 backlog 与 router 自身耗时。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `debug/*`、`input/CanvasInputRouter.kt`、`docs/android-studio-debugging.md` 和 progress 本轮修改。
+
+## 2026-07-05 - Task: 默认 bitmap 渲染使用完美像素采样
+
+### What was done
+- 新增 `render/BitmapSampling.kt`，定义 `PixelPerfect`、`Nearest`、`Linear`、`Bilinear` 和 `Bicubic` 采样选项。
+- 新增 `CanvasRenderOptions`，默认 `bitmapSampling = PixelPerfect`。
+- Compose `drawImage()` 显式使用 `FilterQuality.None`，避免 bitmap 缩放/旋转时默认插值导致模糊。
+- README 与 MVP 状态文档记录默认 pixel-perfect sampling 和后续 UI 选择计划。
+
+### Testing
+- `.\gradlew.bat :android:app:testDebugUnitTest`：通过。
+- `.\gradlew.bat :android:app:assembleDebug`：通过。
+
+### Notes
+- 目前只接入默认策略，UI 选择器后续可直接绑定 `BitmapSampling`。
+- Compose `FilterQuality` 不直接暴露“线性/双线性”的严格命名，本轮先将 Linear/Bilinear 映射到中等过滤质量，Bicubic 映射到高质量过滤。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，删除 `render/BitmapSampling.kt` 并恢复 `drawImage(image)`。

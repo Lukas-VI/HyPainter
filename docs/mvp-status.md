@@ -7,6 +7,7 @@ HyPainter has a runnable MVP build for Android debug. It is not a polished alpha
 - stylus-priority input into a Compose canvas;
 - two-finger pan, zoom, and rotation with centroid anchoring;
 - screen-to-canvas coordinate mapping that respects viewport pan, zoom, and rotation;
+- pixel-perfect bitmap sampling by default;
 - pressure-sensitive strokes;
 - Rust native engine packaging and rendering;
 - visible committed strokes from Rust RGBA output;
@@ -58,4 +59,5 @@ Android Studio debugging notes are tracked in `docs/android-studio-debugging.md`
 - Move layer compositing deeper into Rust core.
 - Add tile/dirty-rect incremental refresh for performance.
 - Add richer brush library, texture dynamics, eraser mode, opacity, and blend modes.
+- Add UI for bitmap sampling modes: nearest, linear, bilinear, and bicubic.
 - Add real device testing on a stylus Android tablet.

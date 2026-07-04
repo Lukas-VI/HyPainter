@@ -8,6 +8,10 @@ internal class CanvasInputSession {
         private set
 
     private var fingerStreamActive = false
+    var firstFingerPointerId: Int? = null
+        private set
+    var secondFingerPointerId: Int? = null
+        private set
     private var lastTouchGesture: TouchGestureFrame? = null
 
     fun shouldRouteToStylus(actionPointerIsStylus: Boolean): Boolean {
@@ -40,10 +44,23 @@ internal class CanvasInputSession {
         clearAll()
     }
 
-    fun beginFingerStream(): Boolean {
+    fun beginFingerStream(pointerId: Int): Boolean {
         fingerStreamActive = true
+        firstFingerPointerId = pointerId
+        secondFingerPointerId = null
         lastTouchGesture = null
         return true
+    }
+
+    fun beginAdditionalFinger(pointerId: Int): Boolean {
+        if (!fingerStreamActive || firstFingerPointerId == null) {
+            return false
+        }
+        if (pointerId != firstFingerPointerId && secondFingerPointerId == null) {
+            secondFingerPointerId = pointerId
+            lastTouchGesture = null
+        }
+        return fingerStreamActive
     }
 
     fun rejectNonFingerTouch(): Boolean {
@@ -52,8 +69,15 @@ internal class CanvasInputSession {
     }
 
     fun updateSingleFingerTouch(): Boolean {
+        secondFingerPointerId = null
         lastTouchGesture = null
         return fingerStreamActive
+    }
+
+    fun hasActiveTwoFingerPointers(): Boolean {
+        return fingerStreamActive &&
+            firstFingerPointerId != null &&
+            secondFingerPointerId != null
     }
 
     fun updateTwoFingerTouch(
@@ -61,7 +85,7 @@ internal class CanvasInputSession {
         next: TouchGestureFrame,
         onViewportChanged: (ViewportState) -> Unit,
     ): Boolean {
-        if (!fingerStreamActive) {
+        if (!hasActiveTwoFingerPointers()) {
             lastTouchGesture = null
             return false
         }
@@ -78,17 +102,35 @@ internal class CanvasInputSession {
         return true
     }
 
-    fun endTouchStream(terminal: Boolean): Boolean {
+    fun endTouchPointer(pointerId: Int?, terminal: Boolean): Boolean {
         lastTouchGesture = null
         if (terminal) {
-            fingerStreamActive = false
+            clearTouch()
+            return false
+        }
+        if (pointerId == firstFingerPointerId) {
+            firstFingerPointerId = secondFingerPointerId
+            secondFingerPointerId = null
+        } else if (pointerId == secondFingerPointerId) {
+            secondFingerPointerId = null
         }
         return fingerStreamActive
     }
 
+    fun cancelTouchStream(): Boolean {
+        clearTouch()
+        return false
+    }
+
     private fun clearAll() {
         stylusPointerId = null
+        clearTouch()
+    }
+
+    private fun clearTouch() {
         fingerStreamActive = false
+        firstFingerPointerId = null
+        secondFingerPointerId = null
         lastTouchGesture = null
     }
 }

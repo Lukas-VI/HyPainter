@@ -131,6 +131,12 @@ private fun CanvasScreen() {
                     if (toolbarBusy.value) {
                         return@pointerInteropFilter true
                     }
+                    if (
+                        !event.hasStylusOrEraserPointer() &&
+                        toolbarBounds.value?.let { event.isAnyPointerInside(it) } == true
+                    ) {
+                        return@pointerInteropFilter false
+                    }
                     if (event.hasStylusOrEraserPointer()) {
                         val insideControls = toolbarBounds.value?.let { event.isInside(it) } == true
                         if (event.isStylusHoverEvent()) {
@@ -198,17 +204,6 @@ private fun CanvasScreen() {
                     .padding(16.dp)
                     .onGloballyPositioned { coordinates ->
                         toolbarBounds.value = coordinates.boundsInRoot()
-                    }
-                    .pointerInteropFilter { event ->
-                        if (event.isStylusHoverEvent()) {
-                            showControlsForStylusHover()
-                            false
-                        } else if (event.isStylusPressEvent() && controlsHider.shouldHidePressInControls()) {
-                            hideControlsForStylus()
-                            true
-                        } else {
-                            false
-                        }
                     }
                     .horizontalScroll(rememberScrollState()),
                 context = context,
@@ -542,6 +537,17 @@ private fun MotionEvent.isInside(bounds: Rect): Boolean {
             if (x >= bounds.left && x <= bounds.right && y >= bounds.top && y <= bounds.bottom) {
                 return true
             }
+        }
+    }
+    return false
+}
+
+private fun MotionEvent.isAnyPointerInside(bounds: Rect): Boolean {
+    for (index in 0 until pointerCount) {
+        val x = getX(index)
+        val y = getY(index)
+        if (x >= bounds.left && x <= bounds.right && y >= bounds.top && y <= bounds.bottom) {
+            return true
         }
     }
     return false

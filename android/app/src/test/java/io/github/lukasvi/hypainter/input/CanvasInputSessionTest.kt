@@ -15,7 +15,8 @@ class CanvasInputSessionTest {
         val session = CanvasInputSession()
         var viewportChanges = 0
 
-        assertTrue(session.beginFingerStream())
+        assertTrue(session.beginFingerStream(pointerId = 1))
+        assertTrue(session.beginAdditionalFinger(pointerId = 2))
         assertTrue(
             session.updateTwoFingerTouch(
                 viewport = ViewportState(),
@@ -59,7 +60,7 @@ class CanvasInputSessionTest {
         val session = CanvasInputSession()
         var viewportChanges = 0
 
-        assertTrue(session.beginFingerStream())
+        assertTrue(session.beginFingerStream(pointerId = 1))
         assertTrue(session.updateSingleFingerTouch())
 
         assertEquals(0, viewportChanges)
@@ -86,7 +87,8 @@ class CanvasInputSessionTest {
         val anchoredCanvasPoint = viewport.toCanvas(previous.centroid)
         var transformed: ViewportState? = null
 
-        assertTrue(session.beginFingerStream())
+        assertTrue(session.beginFingerStream(pointerId = 1))
+        assertTrue(session.beginAdditionalFinger(pointerId = 2))
         assertTrue(session.updateTwoFingerTouch(viewport, previous) { transformed = it })
         assertNull(transformed)
         assertTrue(session.updateTwoFingerTouch(viewport, next) { transformed = it })
@@ -116,7 +118,8 @@ class CanvasInputSessionTest {
         val session = CanvasInputSession()
         var viewportChanges = 0
 
-        assertTrue(session.beginFingerStream())
+        assertTrue(session.beginFingerStream(pointerId = 1))
+        assertTrue(session.beginAdditionalFinger(pointerId = 2))
         assertTrue(
             session.updateTwoFingerTouch(
                 viewport = ViewportState(),
@@ -135,6 +138,43 @@ class CanvasInputSessionTest {
             ),
         )
 
+        assertEquals(0, viewportChanges)
+    }
+
+    @Test
+    fun twoFingerTouchStopsWhenTrackedPointerLifts() {
+        val session = CanvasInputSession()
+        var viewportChanges = 0
+
+        assertTrue(session.beginFingerStream(pointerId = 10))
+        assertTrue(session.beginAdditionalFinger(pointerId = 20))
+        assertTrue(
+            session.updateTwoFingerTouch(
+                viewport = ViewportState(),
+                next = TouchGestureFrame(centroid = Offset(120f, 80f), distance = 90f, angleDegrees = 0f),
+                onViewportChanged = { viewportChanges++ },
+            ),
+        )
+
+        assertTrue(session.endTouchPointer(pointerId = 10, terminal = false))
+
+        assertFalse(
+            session.updateTwoFingerTouch(
+                viewport = ViewportState(),
+                next = TouchGestureFrame(centroid = Offset(220f, 180f), distance = 120f, angleDegrees = 20f),
+                onViewportChanged = { viewportChanges++ },
+            ),
+        )
+        assertEquals(0, viewportChanges)
+
+        assertTrue(session.beginAdditionalFinger(pointerId = 30))
+        assertTrue(
+            session.updateTwoFingerTouch(
+                viewport = ViewportState(),
+                next = TouchGestureFrame(centroid = Offset(220f, 180f), distance = 120f, angleDegrees = 20f),
+                onViewportChanged = { viewportChanges++ },
+            ),
+        )
         assertEquals(0, viewportChanges)
     }
 

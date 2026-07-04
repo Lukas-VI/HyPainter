@@ -155,26 +155,52 @@ internal class CanvasInputRouter {
 
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                return session.beginFingerStream()
+                return session.beginFingerStream(event.getPointerId(event.actionIndex))
             }
 
-            MotionEvent.ACTION_POINTER_DOWN, MotionEvent.ACTION_MOVE -> {
+            MotionEvent.ACTION_POINTER_DOWN -> {
                 if (event.pointerCount < 2) {
                     return session.updateSingleFingerTouch()
                 }
-
+                if (!session.beginAdditionalFinger(event.getPointerId(event.actionIndex))) {
+                    return false
+                }
+                val next = touchGestureFrameFromSession(event) ?: return session.updateSingleFingerTouch()
                 return session.updateTwoFingerTouch(
                     viewport = viewport,
-                    next = event.touchGestureFrame(),
+                    next = next,
                     onViewportChanged = onViewportChanged,
                 )
             }
 
-            MotionEvent.ACTION_POINTER_UP, MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                return session.endTouchStream(
-                    terminal = event.actionMasked == MotionEvent.ACTION_UP ||
-                        event.actionMasked == MotionEvent.ACTION_CANCEL,
+            MotionEvent.ACTION_MOVE -> {
+                if (event.pointerCount < 2) {
+                    return session.updateSingleFingerTouch()
+                }
+                val next = touchGestureFrameFromSession(event) ?: return session.updateSingleFingerTouch()
+                return session.updateTwoFingerTouch(
+                    viewport = viewport,
+                    next = next,
+                    onViewportChanged = onViewportChanged,
                 )
+            }
+
+            MotionEvent.ACTION_POINTER_UP -> {
+                return session.endTouchPointer(
+                    pointerId = event.getPointerId(event.actionIndex),
+                    terminal = false,
+                )
+            }
+
+            MotionEvent.ACTION_UP -> {
+                return session.endTouchPointer(
+                    pointerId = event.getPointerId(event.actionIndex),
+                    terminal = true,
+                )
+            }
+
+            MotionEvent.ACTION_CANCEL -> {
+                return session.cancelTouchStream()
             }
         }
 
@@ -255,6 +281,12 @@ internal class CanvasInputRouter {
         onDebugChanged(next)
         Log.d(DEBUG_LOG_TAG, next.toLogLine(viewport))
     }
+
+    private fun touchGestureFrameFromSession(event: MotionEvent): TouchGestureFrame? {
+        val firstPointerId = session.firstFingerPointerId ?: return null
+        val secondPointerId = session.secondFingerPointerId ?: return null
+        return event.touchGestureFrame(firstPointerId, secondPointerId)
+    }
 }
 
 private fun MotionEvent.hasStylusPointer(): Boolean {
@@ -285,9 +317,14 @@ private fun MotionEvent.findAnyStylusPointerIndex(): Int? {
     return null
 }
 
-private fun MotionEvent.touchGestureFrame(): TouchGestureFrame {
-    val first = Offset(getX(0), getY(0))
-    val second = Offset(getX(1), getY(1))
+private fun MotionEvent.touchGestureFrame(firstPointerId: Int, secondPointerId: Int): TouchGestureFrame? {
+    val firstIndex = findPointerIndex(firstPointerId)
+    val secondIndex = findPointerIndex(secondPointerId)
+    if (firstIndex < 0 || secondIndex < 0) {
+        return null
+    }
+    val first = Offset(getX(firstIndex), getY(firstIndex))
+    val second = Offset(getX(secondIndex), getY(secondIndex))
     val delta = second - first
     return TouchGestureFrame(
         centroid = (first + second) / 2f,

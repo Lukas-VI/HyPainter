@@ -770,3 +770,20 @@
 ### Notes
 - 完整 `snapshot()` 仍保留 fallback preview 的 active stroke 信息，用于低频工具栏/保存等模型路径；本轮只收紧高频 canvas 绘制路径。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `KotlinPaintingEngine.kt`、`NativePaintingEngine.kt` 和 progress 本轮修改。
+
+## 2026-07-05 - Task: 恢复手指点击 UI 并稳定双指 pointer 跟踪
+
+### What was done
+- Canvas input 在 finger 事件落入 toolbar bounds 时直接放行，不再把 UI 区域内的手指事件送入 canvas input router。
+- 移除 toolbar Row 上包住所有 chip 的 `pointerInteropFilter`，避免 stylus 避让监听干扰 Material chip 的 finger 点击链路。
+- `CanvasInputSession` 为 finger stream 记录 first/second pointer id；双指 MOVE 根据 pointer id 用 `findPointerIndex` 取当前 index，避免 Android pointer index 重排导致旋转/缩放跳变。
+- `CanvasInputRouter` 拆分 `ACTION_POINTER_DOWN`、`ACTION_MOVE`、`ACTION_POINTER_UP` 处理，双指 transform 只用 session 追踪的两根手指。
+- 扩展 `CanvasInputSessionTest`，覆盖 tracked pointer 抬起后双指 transform 停止，直到新的 second finger down 建立新基准。
+
+### Testing
+- `.\gradlew.bat :android:app:testDebugUnitTest`：通过。
+- `.\gradlew.bat :android:app:assembleDebug --stacktrace`：通过。
+
+### Notes
+- Android 官方 MotionEvent 文档说明 pointer index 的顺序可能随事件变化，pointer id 才在同一手势内保持稳定；因此双指手势也应像 stylus 一样基于 id 追踪。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `MainActivity.kt`、`CanvasInputRouter.kt`、`CanvasInputSession.kt`、`CanvasInputSessionTest.kt` 和 progress 本轮修改。

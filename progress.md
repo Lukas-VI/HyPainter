@@ -339,3 +339,18 @@
 - 这次继续降低长笔画期间工具栏参与高频重组的概率，让 active stroke preview 与按钮区模型状态分离。
 - 后续如果仍有按钮卡顿，应进一步把工具栏变为常驻控制面板状态模型，避免直接读取完整 engine snapshot。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，恢复 `CanvasScreen` 内联工具栏和单一 `version` 计数。
+
+## 2026-07-05 - Task: 修复 active stroke 预览列表别名进入提交历史
+
+### What was done
+- 新增 `stableCopyForLayer()`，在 stroke 进入 committed/native 提交边界前复制点列表并重标记图层。
+- `NativePaintingEngine.endStroke()` 使用稳定副本生成 native samples 和 committed history，避免 fallback preview 清空时影响已提交 stroke。
+- 新增 `StrokeSnapshotsTest`，验证稳定副本不会被原 mutable point list 清空影响。
+
+### Testing
+- `.\gradlew.bat :android:app:testDebugUnitTest`：通过。
+- `.\gradlew.bat :android:app:assembleDebug`：通过。
+
+### Notes
+- 这是上一轮降低预览复制开销后发现的数据正确性边界：预览可以共享 live list，但提交历史必须稳定复制。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，删除 `StrokeSnapshots.kt`、`StrokeSnapshotsTest.kt` 并还原 `NativePaintingEngine.kt`。

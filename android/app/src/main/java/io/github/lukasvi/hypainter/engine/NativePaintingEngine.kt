@@ -33,8 +33,9 @@ class NativePaintingEngine private constructor(
 
     override fun endStroke() {
         val stroke = fallbackPreview.snapshot().activeStroke ?: return
-        val samples = FloatArray(stroke.points.size * SAMPLE_STRIDE)
-        stroke.points.forEachIndexed { index, sample ->
+        val committedStroke = stroke.stableCopyForLayer(activeLayerId)
+        val samples = FloatArray(committedStroke.points.size * SAMPLE_STRIDE)
+        committedStroke.points.forEachIndexed { index, sample ->
             val offset = index * SAMPLE_STRIDE
             samples[offset] = sample.position.x
             samples[offset + 1] = sample.position.y
@@ -44,7 +45,7 @@ class NativePaintingEngine private constructor(
             samples[offset + 5] = sample.timestamp.toFloat()
         }
         nativeAppendStroke(handle, samples)
-        committedStrokes.add(stroke.copy(layerId = activeLayerId))
+        committedStrokes.add(committedStroke)
         fallbackPreview.clear()
         refreshRenderedImage()
     }

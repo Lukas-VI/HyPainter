@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import android.view.MotionEvent
+import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.core.content.FileProvider
@@ -27,6 +28,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -65,6 +67,7 @@ private fun HyPainterApp() {
 @Composable
 private fun CanvasScreen() {
     val context = LocalContext.current
+    val view = LocalView.current
     val engine = remember { createPaintingEngine() }
     val version = remember { mutableStateOf(0) }
     val viewport = remember { mutableStateOf(ViewportState()) }
@@ -74,6 +77,11 @@ private fun CanvasScreen() {
     val debugOverlayVisible = remember { mutableStateOf(false) }
     val debugState = remember { mutableStateOf(CanvasDebugState()) }
     val inputRouter = remember { CanvasInputRouter() }
+    val frameInvalidator = remember(view) {
+        FrameInvalidator(view) {
+            version.value++
+        }
+    }
     val snapshot = remember(version.value) { engine.snapshot() }
 
     Box(
@@ -91,6 +99,7 @@ private fun CanvasScreen() {
                         engine = engine,
                         onViewportChanged = { viewport.value = it },
                         onEngineChanged = { version.value++ },
+                        onEngineChangedNextFrame = { frameInvalidator.request() },
                         onPressure = { latestPressure.value = it },
                         debugEnabled = debugOverlayVisible.value,
                         onDebugChanged = { debugState.value = it },
@@ -290,6 +299,24 @@ private fun BrushChip(label: String, onClick: () -> Unit) {
     AssistChip(onClick = onClick, label = { Text(label) })
 }
 
+private class FrameInvalidator(
+    private val view: View,
+    private val onFrame: () -> Unit,
+) {
+    private var scheduled = false
+
+    fun request() {
+        if (scheduled) {
+            return
+        }
+        scheduled = true
+        view.postOnAnimation {
+            scheduled = false
+            onFrame()
+        }
+    }
+}
+
 @Composable
 private fun CanvasDebugOverlay(
     modifier: Modifier,
@@ -334,12 +361,13 @@ private class CanvasInputRouter {
         engine: PaintingEngine,
         onViewportChanged: (ViewportState) -> Unit,
         onEngineChanged: () -> Unit,
+        onEngineChangedNextFrame: () -> Unit,
         onPressure: (Float) -> Unit,
         debugEnabled: Boolean,
         onDebugChanged: (CanvasDebugState) -> Unit,
     ): Boolean {
         val consumed = if (stylusPointerId != null || event.actionPointerIsStylus()) {
-            handleStylusEvent(event, viewport, engine, onEngineChanged, onPressure)
+            handleStylusEvent(event, viewport, engine, onEngineChanged, onEngineChangedNextFrame, onPressure)
         } else {
             handleTouchEvent(event, viewport, onViewportChanged)
         }
@@ -352,6 +380,7 @@ private class CanvasInputRouter {
         viewport: ViewportState,
         engine: PaintingEngine,
         onEngineChanged: () -> Unit,
+        onEngineChangedNextFrame: () -> Unit,
         onPressure: (Float) -> Unit,
     ): Boolean {
         when (event.actionMasked) {
@@ -387,7 +416,7 @@ private class CanvasInputRouter {
                     lastPressureReportTime = event.eventTime
                     onPressure(event.getPressure(pointerIndex).coerceIn(0f, 1f))
                 }
-                onEngineChanged()
+                onEngineChangedNextFrame()
                 return true
             }
 

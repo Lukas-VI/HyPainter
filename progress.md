@@ -261,3 +261,19 @@
 ### Notes
 - 这次只降低诊断和读数 UI 的高频开销；实时笔画预览仍保留每个 MOVE 事件刷新，后续若仍卡顿，应继续做帧率节流或局部绘制刷新。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `MainActivity.kt`、android/README、docs/mvp-status.md 和 progress 本轮修改。
+
+## 2026-07-05 - Task: 将笔画预览刷新合并到屏幕帧节奏
+
+### What was done
+- 新增 `FrameInvalidator`，使用 `View.postOnAnimation` 合并高频 stylus MOVE 的 Compose 刷新请求。
+- 笔输入采样仍逐个追加到 engine，historical samples 不丢；只将 active stroke preview 的 `version++` 限制到下一帧。
+- `ACTION_DOWN`、`ACTION_UP`、`ACTION_CANCEL` 和找不到 stylus pointer 的异常收尾仍立即刷新，保证开始/结束状态及时一致。
+
+### Testing
+- `.\gradlew.bat :android:app:testDebugUnitTest`：通过。
+- `.\gradlew.bat :android:app:assembleDebug`：通过。
+
+### Notes
+- 这是针对“笔操作比触摸低得多、长笔画几秒后中断/卡顿”的核心高频路径优化，减少输入采样频率高于屏幕刷新率时的无效重组。
+- 后续真机若仍出现卡顿，应继续拆分 active stroke preview 绘制与整页 toolbar 重组，或引入更细粒度的 canvas invalidation。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，移除 `FrameInvalidator` 并将 stylus MOVE 恢复为直接 `onEngineChanged()`。

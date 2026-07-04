@@ -211,6 +211,13 @@ private fun CanvasScreen() {
                         awaitPointerEventScope {
                             while (true) {
                                 val event = awaitPointerEvent()
+                                val stylusHover = event.changes.any { change ->
+                                    !change.pressed &&
+                                        (change.type == PointerType.Stylus || change.type == PointerType.Eraser)
+                                }
+                                if (stylusHover) {
+                                    showControlsForStylusHover()
+                                }
                                 val stylusPressed = event.changes.any { change ->
                                     change.pressed &&
                                         !change.previousPressed &&

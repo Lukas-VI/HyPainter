@@ -803,3 +803,19 @@
 ### Notes
 - 当前预期：finger 可点 UI；未 hover 的 stylus press 进入 UI 会隐藏 controls；hover 后 stylus press 可交给 UI；debug overlay 位置不变。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `MainActivity.kt`、`KotlinPaintingEngine.kt`、`NativePaintingEngine.kt` 和 progress 本轮修改。
+
+## 2026-07-05 - Task: 修复抬笔后笔画未提交到画布
+
+### What was done
+- 修复 `KotlinPaintingEngine.drainActiveStroke` 清理顺序：现在只取出 active stroke，不提前清空 active raster cache。
+- `KotlinPaintingEngine.endStroke` 在 committed cache merge 完成后再清理 active preview，避免“预览正常、抬笔后消失/画不上去”。
+- Toolbar stylus-only pointerInput 增加 hover arming：stylus/eraser hover 到 toolbar 区域时立即 `showForHover`，hover 后按 UI 不再触发隐藏。
+
+### Testing
+- `.\gradlew.bat :android:app:testDebugUnitTest`：通过。
+- `.\gradlew.bat :android:app:assembleDebug --stacktrace`：通过。
+
+### Notes
+- 根因是上一轮轻量 `drainActiveStroke` 优化把 active cache 也清掉了，而 committed bitmap cache 的合并正依赖这份 active cache。
+- 当前预期：笔画 preview 抬笔后应留在 committed canvas；未 hover stylus press UI 隐藏；hover 后 stylus press UI 可点击；finger UI 点击仍不被消费。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `MainActivity.kt`、`KotlinPaintingEngine.kt` 和 progress 本轮修改。

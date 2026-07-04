@@ -48,6 +48,7 @@ class KotlinPaintingEngine(
             mergeActiveCacheInto(displayCache, activeLayerId, layers).takeIf { !it }?.let {
                 displayCache.append(stroke, layers)
             }
+            clearActivePreview()
         }
     }
 
@@ -161,8 +162,11 @@ class KotlinPaintingEngine(
         }
         val stroke = EngineStroke(activeStroke.toList(), brush, layerId)
         activeStroke = mutableListOf()
-        activeCache.clear()
         return stroke
+    }
+
+    internal fun clearActivePreview() {
+        activeCache.clear()
     }
 
     private fun renderBitmap(): Bitmap {

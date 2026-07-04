@@ -711,3 +711,18 @@
 ### Notes
 - 这个修复面向“笔最高优先级”的底层边界：stylus drawing 期间被清掉的手指流，不能在 stylus 抬起后不经新的 down 事件自动恢复成画布变换。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `CanvasInputSession.kt`、`CanvasInputSessionTest.kt` 和 progress 本轮修改。
+
+## 2026-07-05 - Task: 总结当前架构职责与 MVP 进展
+
+### What was done
+- 新增 `docs/current-architecture.md`，总结当前 Android、engine、input、debug、render 和 Rust crate 的职责边界。
+- 文档加入结构图与运行时数据流图，明确 `PaintingEngine` 应作为高内聚 facade，UI/input/debug 不应泄漏或改变 engine 内部一致性。
+- 区分当前 MVP 临时实现与长期目标：Android 仍承担部分文档语义，Rust 已有 brush/tile/ffi 雏形但还需要继续下沉文档、图层、撤销和文件格式。
+- 更新 `docs/README.md`，把当前架构文档、MVP 状态、设备输入测试和 Android Studio 调试文档纳入索引。
+
+### Testing
+- 文档改动，无编译测试。
+
+### Notes
+- 该文档用于后续重构对照：新增功能时优先确认它应该进入 UI、input、viewport、engine、debug 还是 Rust core。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，删除 `docs/current-architecture.md` 并还原 `docs/README.md`、`progress.md`。

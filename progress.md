@@ -496,3 +496,19 @@
 - 这是异步化后的保守 MVP 并发策略：后台任务运行时暂停绘制和模型变更，避免主线程等待锁或后台任务读写半更新状态。
 - 后续更完整方案应使用 engine 单线程任务队列、snapshot copy 或读写锁，使导出可与绘制更细粒度地并行。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `MainActivity.kt` 与 progress 本轮修改。
+
+## 2026-07-05 - Task: 减少画布每帧图层过滤分配
+
+### What was done
+- 移除画布绘制路径中的 `filter -> map -> toSet -> filter` 可见图层集合构建。
+- 改用 indexed loop 绘制 committed strokes，并用 `layerIsVisible()` 直接检查图层可见性。
+- active stroke 也走同一可见性检查，避免每帧创建临时集合。
+
+### Testing
+- `.\gradlew.bat :android:app:testDebugUnitTest`：通过。
+- `.\gradlew.bat :android:app:assembleDebug`：通过。
+
+### Notes
+- 这是针对长笔画/高帧率预览的 GC 压力削减，减少每帧小对象和集合分配。
+- 后续图层数量增多后可维护 layer visibility cache，但当前 indexed scan 对 MVP 图层数量更简单。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，恢复 draw path 中的 visible layer set/filter 逻辑。

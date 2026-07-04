@@ -126,7 +126,6 @@ private fun CanvasScreen() {
                 },
         ) {
             val state = viewport.value
-            val visibleLayerIds = snapshot.layers.filter { it.visible }.map { it.id }.toSet()
             withTransformCompat(state) {
                 drawCanvasBackground(snapshot.canvasWidth, snapshot.canvasHeight)
                 snapshot.renderedImage?.let { image ->
@@ -135,10 +134,17 @@ private fun CanvasScreen() {
                         filterQuality = renderOptions.bitmapSampling.toFilterQuality(),
                     )
                 }
-                snapshot.committedStrokes.filter { it.layerId in visibleLayerIds }.forEach { stroke ->
-                    drawStroke(stroke)
+                for (index in snapshot.committedStrokes.indices) {
+                    val stroke = snapshot.committedStrokes[index]
+                    if (snapshot.layerIsVisible(stroke.layerId)) {
+                        drawStroke(stroke)
+                    }
                 }
-                snapshot.activeStroke?.takeIf { it.layerId in visibleLayerIds }?.let { drawStroke(it) }
+                snapshot.activeStroke?.let { stroke ->
+                    if (snapshot.layerIsVisible(stroke.layerId)) {
+                        drawStroke(stroke)
+                    }
+                }
             }
         }
 
@@ -484,4 +490,14 @@ private fun DrawScope.drawStroke(stroke: EngineStroke) {
             style = Stroke(width = 1f),
         )
     }
+}
+
+private fun io.github.lukasvi.hypainter.engine.EngineSnapshot.layerIsVisible(layerId: Long): Boolean {
+    for (index in layers.indices) {
+        val layer = layers[index]
+        if (layer.id == layerId) {
+            return layer.visible
+        }
+    }
+    return false
 }

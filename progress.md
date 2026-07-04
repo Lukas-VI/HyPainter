@@ -277,3 +277,19 @@
 - 这是针对“笔操作比触摸低得多、长笔画几秒后中断/卡顿”的核心高频路径优化，减少输入采样频率高于屏幕刷新率时的无效重组。
 - 后续真机若仍出现卡顿，应继续拆分 active stroke preview 绘制与整页 toolbar 重组，或引入更细粒度的 canvas invalidation。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，移除 `FrameInvalidator` 并将 stylus MOVE 恢复为直接 `onEngineChanged()`。
+
+## 2026-07-05 - Task: 加固笔触与触摸交错时的输入状态机
+
+### What was done
+- stylus/eraser 一旦接管输入，立即清理 finger stream 与双指 gesture 状态，避免先手指后笔、掌触混入时残留旧状态。
+- stylus 正常抬起、取消、或 MOVE 中找不到 active pointer 的异常收尾都会清理 stylus、finger 与双指 gesture 状态。
+- 保持笔输入最高优先级，触摸事件不会在笔画期间切回画布平移/旋转。
+
+### Testing
+- `.\gradlew.bat :android:app:testDebugUnitTest`：通过。
+- `.\gradlew.bat :android:app:assembleDebug`：通过。
+
+### Notes
+- 这次修复针对真机常见的混合事件序列：掌触、先 finger 再 stylus、pointer index 变化和厂商事件取消。
+- 仍需用平板验证 overlay 中 route 在笔画期间保持 stylus，不会跳到 two-finger 或 single-finger。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `MainActivity.kt` 与 progress 本轮修改。

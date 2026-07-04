@@ -390,6 +390,8 @@ private class CanvasInputRouter {
                     return stylusPointerId != null
                 }
                 stylusPointerId = event.getPointerId(pointerIndex)
+                fingerStreamActive = false
+                lastTouchGesture = null
                 strokeSamples = 1
                 historySamples = 0
                 lastPressureReportTime = event.eventTime
@@ -403,6 +405,9 @@ private class CanvasInputRouter {
                 val pointerIndex = event.findActiveStylusPointerIndex()
                 if (pointerIndex == null) {
                     engine.endStroke()
+                    stylusPointerId = null
+                    lastTouchGesture = null
+                    fingerStreamActive = false
                     onEngineChanged()
                     return true
                 }
@@ -426,6 +431,7 @@ private class CanvasInputRouter {
                     engine.endStroke()
                     stylusPointerId = null
                     lastTouchGesture = null
+                    fingerStreamActive = false
                     onEngineChanged()
                 }
                 return true
@@ -436,6 +442,7 @@ private class CanvasInputRouter {
                     engine.endStroke()
                     stylusPointerId = null
                     lastTouchGesture = null
+                    fingerStreamActive = false
                     onEngineChanged()
                 }
                 return true

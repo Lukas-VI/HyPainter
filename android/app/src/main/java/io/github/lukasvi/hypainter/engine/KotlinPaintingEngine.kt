@@ -43,14 +43,11 @@ class KotlinPaintingEngine(
     }
 
     override fun endStroke() {
-        if (activeStroke.isNotEmpty()) {
-            val stroke = EngineStroke(activeStroke.toList(), brush, activeLayerId)
+        drainActiveStroke()?.let { stroke ->
             committedStrokes.add(stroke)
             mergeActiveCacheInto(displayCache, activeLayerId, layers).takeIf { !it }?.let {
                 displayCache.append(stroke, layers)
             }
-            activeStroke = mutableListOf()
-            activeCache.clear()
         }
     }
 
@@ -156,6 +153,16 @@ class KotlinPaintingEngine(
         layers: List<EngineLayer>,
     ): Boolean {
         return target.mergeFrom(activeCache, layerId, layers)
+    }
+
+    internal fun drainActiveStroke(layerId: Long = activeLayerId): EngineStroke? {
+        if (activeStroke.isEmpty()) {
+            return null
+        }
+        val stroke = EngineStroke(activeStroke.toList(), brush, layerId)
+        activeStroke = mutableListOf()
+        activeCache.clear()
+        return stroke
     }
 
     private fun renderBitmap(): Bitmap {

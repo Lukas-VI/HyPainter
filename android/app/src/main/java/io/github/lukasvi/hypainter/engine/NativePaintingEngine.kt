@@ -31,8 +31,7 @@ class NativePaintingEngine private constructor(
     }
 
     override fun endStroke() {
-        val stroke = fallbackPreview.snapshot().activeStroke ?: return
-        val committedStroke = stroke.stableCopyForLayer(activeLayerId)
+        val committedStroke = fallbackPreview.drainActiveStroke(activeLayerId) ?: return
         committedStrokes.add(committedStroke)
         fallbackPreview.mergeActiveCacheInto(displayCache, activeLayerId, layers).takeIf { !it }?.let {
             displayCache.append(committedStroke, layers)

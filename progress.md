@@ -787,3 +787,19 @@
 ### Notes
 - Android 官方 MotionEvent 文档说明 pointer index 的顺序可能随事件变化，pointer id 才在同一手势内保持稳定；因此双指手势也应像 stylus 一样基于 id 追踪。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `MainActivity.kt`、`CanvasInputRouter.kt`、`CanvasInputSession.kt`、`CanvasInputSessionTest.kt` 和 progress 本轮修改。
+
+## 2026-07-05 - Task: 恢复 stylus UI 避让且不阻断 finger 点击
+
+### What was done
+- Toolbar 容器改用 Compose `pointerInput` 做 stylus-only 避让监听：只有 stylus/eraser 新按下且未 hover armed 时才 consume 并隐藏 controls。
+- Finger touch 在 toolbar 内不被 stylus 避让监听消费，继续交给 Material `AssistChip` 处理点击。
+- 保留 canvas 层对 finger-in-toolbar 的放行逻辑，避免 UI 区域手指事件进入 canvas input router。
+- `KotlinPaintingEngine` 增加 `drainActiveStroke`，`NativePaintingEngine.endStroke()` 不再通过完整 `fallbackPreview.snapshot()` 取 active stroke，减少频繁短笔画抬笔时的对象构造。
+
+### Testing
+- `.\gradlew.bat :android:app:testDebugUnitTest`：通过。
+- `.\gradlew.bat :android:app:assembleDebug --stacktrace`：通过。
+
+### Notes
+- 当前预期：finger 可点 UI；未 hover 的 stylus press 进入 UI 会隐藏 controls；hover 后 stylus press 可交给 UI；debug overlay 位置不变。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `MainActivity.kt`、`KotlinPaintingEngine.kt`、`NativePaintingEngine.kt` 和 progress 本轮修改。

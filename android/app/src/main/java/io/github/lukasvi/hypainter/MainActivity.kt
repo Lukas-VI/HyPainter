@@ -35,6 +35,8 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.input.pointer.PointerType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -198,30 +200,49 @@ private fun CanvasScreen() {
         }
 
         if (!controlsHiddenForStylus) {
-            CanvasToolbar(
+            Box(
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .padding(16.dp)
                     .onGloballyPositioned { coordinates ->
                         toolbarBounds.value = coordinates.boundsInRoot()
                     }
-                    .horizontalScroll(rememberScrollState()),
-                context = context,
-                engine = engine,
-                snapshot = toolbarSnapshot,
-                latestPressure = latestPressure.value,
-                exportStatus = exportStatus.value,
-                projectStatus = projectStatus.value,
-                toolbarBusy = toolbarBusy.value,
-                onExportStatusChanged = { exportStatus.value = it },
-                onProjectStatusChanged = { projectStatus.value = it },
-                onToolbarBusyChanged = { toolbarBusy.value = it },
-                onModelChanged = refreshModel,
-                launchBackground = { block -> coroutineScope.launch { block() } },
-                debugEnabled = BuildConfig.DEBUG,
-                debugOverlayVisible = debugOverlayVisible.value,
-                onDebugOverlayChanged = { debugOverlayVisible.value = it },
-            )
+                    .pointerInput(controlsHiddenForStylus) {
+                        awaitPointerEventScope {
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                val stylusPressed = event.changes.any { change ->
+                                    change.pressed &&
+                                        !change.previousPressed &&
+                                        (change.type == PointerType.Stylus || change.type == PointerType.Eraser)
+                                }
+                                if (stylusPressed && controlsHider.shouldHidePressInControls()) {
+                                    hideControlsForStylus()
+                                    event.changes.forEach { change -> change.consume() }
+                                }
+                            }
+                        }
+                    },
+            ) {
+                CanvasToolbar(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    context = context,
+                    engine = engine,
+                    snapshot = toolbarSnapshot,
+                    latestPressure = latestPressure.value,
+                    exportStatus = exportStatus.value,
+                    projectStatus = projectStatus.value,
+                    toolbarBusy = toolbarBusy.value,
+                    onExportStatusChanged = { exportStatus.value = it },
+                    onProjectStatusChanged = { projectStatus.value = it },
+                    onToolbarBusyChanged = { toolbarBusy.value = it },
+                    onModelChanged = refreshModel,
+                    launchBackground = { block -> coroutineScope.launch { block() } },
+                    debugEnabled = BuildConfig.DEBUG,
+                    debugOverlayVisible = debugOverlayVisible.value,
+                    onDebugOverlayChanged = { debugOverlayVisible.value = it },
+                )
+            }
         }
 
         if (BuildConfig.DEBUG && debugOverlayVisible.value) {

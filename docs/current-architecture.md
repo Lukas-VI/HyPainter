@@ -25,7 +25,7 @@ flowchart TD
     Input --> Viewport["CanvasViewport.kt"]
     Input --> EngineApi["engine/PaintingEngine"]
 
-    Main --> Toolbar["CanvasToolbar and debug chips"]
+    Main --> AppShell["App command bar / dialogs / paint controls"]
     Main --> RenderOptions["render/BitmapSampling"]
     Main --> Debug["debug/CanvasDebugOverlay"]
 
@@ -76,17 +76,17 @@ sequenceDiagram
 Current role:
 
 - Hosts the Compose painting screen.
-- Owns top-level UI state: viewport, pressure, toolbar status, debug overlay, render options, and project/export status.
+- Owns top-level UI state: document title, viewport, pressure, command status, debug overlay, render options, and project/export status.
 - Connects `CanvasInputRouter` to `PaintingEngine`.
 - Draws cached committed image plus active stroke preview.
-- Contains the current MVP toolbar.
-- Implements stylus-aware UI hiding around toolbar and debug controls.
+- Provides the current app shell: `File`, `Canvas`, and `View` menus, new-canvas dialog, canvas settings dialog, and quick paint controls.
+- Keeps command UI outside the drawing surface so toolbar events do not compete with canvas stylus input.
 
 Boundary to preserve:
 
 - It may coordinate modules, but should not grow into the document model.
 - It should not manually manipulate stroke internals.
-- The current toolbar should eventually split into dedicated UI components.
+- The current app shell should eventually split into dedicated UI components and a product command layer.
 
 ### `CanvasViewport.kt`
 
@@ -343,12 +343,15 @@ Completed or substantially working:
 - Residual finger touch after stylus input no longer immediately takes over viewport movement.
 - Stylus MOVE can recover from missed/consumed DOWN and still start a real stroke.
 - Default bitmap rendering is pixel-perfect.
+- `File` menu now exposes new canvas, draft save/load, PNG export, and PNG share.
+- `Canvas` menu now exposes canvas settings and viewport reset.
+- `View` menu now exposes bitmap sampling modes and debug overlay toggling.
 - Debug overlay and Logcat route provide useful input/performance diagnostics.
 - Basic undo, clear, layer add/select/visibility, save/load, export/share are present at MVP level.
 
 Still incomplete or temporary:
 
-- UI is still a single MVP toolbar, not a professional tablet drawing interface.
+- UI now has a first app-shell pass, but it is still inside `MainActivity.kt` rather than split into focused components.
 - Android still owns much of the document semantics for layers and project save/load.
 - Rust brush engine is a basic circular dab engine, not yet production brush behavior.
 - Tile architecture exists in Rust but Android display still relies on whole bitmap caches.
@@ -384,7 +387,6 @@ Rules:
 1. Keep `PaintingEngine` as the primary boundary and make it stricter.
 2. Move more layer/document semantics from Android into Rust once the FFI command shape stabilizes.
 3. Add a MotionEvent-level Android or Robolectric test layer for ACTION_DOWN/MOVE/UP/CANCEL sequences.
-4. Split `MainActivity.kt` into `CanvasScreen`, toolbar controls, debug controls, and project actions.
+4. Split `MainActivity.kt` into `CanvasScreen`, app command bar, dialogs, paint controls, debug controls, and project actions.
 5. Add a performance/debug document that defines hard gates: input age, handle time, frame skip count, heap churn, and GC stalls.
 6. Start designing the real `.pdraw` container before project files become user-facing.
-

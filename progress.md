@@ -839,3 +839,27 @@
 ### Notes
 - 当前预期：hover 到 UI 后可以用笔点击 UI；hover 离开或 hover exit 后 UI 仍显示，但下一次无 hover 直接用笔碰 UI 会隐藏；finger 点击 UI 不受影响。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `MainActivity.kt`、`StylusControlsHider.kt`、`StylusControlsHiderTest.kt`、`PaintingEngineRasterCacheInstrumentedTest.kt` 和 progress 本轮修改。
+
+## 2026-07-05 - Task: 建立应用命令栏与画布创建设置节点
+
+### What was done
+- 将命令 UI 从画布上方悬浮层改为固定应用命令栏，画布区域只负责绘制和输入，暂时停止继续投入 stylus-hide UI feature。
+- 新增 `File` 菜单：New Canvas、Save Draft、Load Draft、Export PNG、Share PNG。
+- 新增 `Canvas` 菜单：Canvas Settings、Reset View。
+- 新增 `View` 菜单：Pixel Perfect/Nearest/Linear/Bilinear/Bicubic 采样选择，以及 debug overlay 开关。
+- 新增 `NewCanvasDialog`，支持命名、宽高输入、1024/2048/4K 快速预设，并在创建后重建 `PaintingEngine`、重置 viewport/input router。
+- 新增 `CanvasSettingsDialog`，展示当前画布大小并允许切换 bitmap sampling。
+- 快速工具区收敛为绘画命令：Clear、Undo、压力/引擎状态、颜色、笔刷大小、图层添加/选择/显隐。
+- `docs/current-architecture.md` 同步记录 app shell 当前职责和后续拆分方向。
+
+### Testing
+- `.\gradlew.bat :android:app:testDebugUnitTest`：通过。
+- `.\gradlew.bat :android:app:assembleDebug --stacktrace`：通过。
+- `.\gradlew.bat :android:app:assembleDebugAndroidTest --stacktrace`：通过。
+- `.\gradlew.bat :android:app:installDebug`：已安装到设备 `21051182C - 16`。
+- `adb shell monkey -p io.github.lukasvi.hypainter -c android.intent.category.LAUNCHER 1`：可启动；`ps` 看到进程 `io.github.lukasvi.hypainter`。
+
+### Notes
+- 这是完整系统骨架的第一个节点，不追求最终 UI 视觉，只先建立文件/画布/视图命令入口和职责分离。
+- Draft load 通过 `ProjectCodec` 先读取画布尺寸，再创建匹配尺寸的 engine 后加载，避免旧固定尺寸 engine 承载不同尺寸项目。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `MainActivity.kt`、`docs/current-architecture.md` 和 progress 本轮修改。

@@ -11,14 +11,9 @@ internal class StylusControlsHider {
         hoverArmed = false
     }
 
-    fun showForHoverInControls() {
+    fun showForHover() {
         hidden = false
         hoverArmed = true
-    }
-
-    fun showForLeaveControls() {
-        hidden = false
-        hoverArmed = false
     }
 
     fun shouldHidePressInControls(): Boolean {

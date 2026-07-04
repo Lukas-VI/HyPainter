@@ -726,3 +726,18 @@
 ### Notes
 - 该文档用于后续重构对照：新增功能时优先确认它应该进入 UI、input、viewport、engine、debug 还是 Rust core。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，删除 `docs/current-architecture.md` 并还原 `docs/README.md`、`progress.md`。
+
+## 2026-07-05 - Task: UI 避让改回 hover 后再显示
+
+### What was done
+- `StylusControlsHider` 移除离开 controls 即显示的路径，隐藏后的 controls 只通过 stylus hover 恢复显示。
+- Canvas 层不再在 stylus press/move 离开 toolbar bounds 时自动显示 UI，避免按压绘制过程中 UI 闪回。
+- Debug chip 移回顶部工具栏 Row 内，跟其他 UI 一起隐藏/显示；debug overlay 仍保持左下角不变。
+- 更新 `StylusControlsHiderTest`，覆盖 hide 后保持隐藏直到 hover，以及 hover 后允许 stylus press 交给 UI。
+
+### Testing
+- `.\gradlew.bat :android:app:testDebugUnitTest`：通过。
+
+### Notes
+- 当前语义：按压进入 UI 区域会隐藏 controls；隐藏后必须出现 stylus hover 才显示 controls；显示后 hover armed，笔可点击 UI。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `MainActivity.kt`、`StylusControlsHider.kt`、`StylusControlsHiderTest.kt` 和 progress 本轮修改。

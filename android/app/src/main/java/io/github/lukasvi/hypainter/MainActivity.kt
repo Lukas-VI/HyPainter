@@ -85,7 +85,6 @@ private fun CanvasScreen() {
     val projectStatus = remember { mutableStateOf<String?>(null) }
     val toolbarBusy = remember { mutableStateOf(false) }
     val toolbarBounds = remember { mutableStateOf<Rect?>(null) }
-    val debugChipBounds = remember { mutableStateOf<Rect?>(null) }
     var controlsHiddenForStylus by remember { mutableStateOf(false) }
     val debugOverlayVisible = remember { mutableStateOf(false) }
     val debugState = remember { mutableStateOf(CanvasDebugState()) }
@@ -115,12 +114,7 @@ private fun CanvasScreen() {
         Unit
     }
     val showControlsForStylusHover = {
-        controlsHider.showForHoverInControls()
-        controlsHiddenForStylus = controlsHider.hidden
-        Unit
-    }
-    val showControlsForStylusLeave = {
-        controlsHider.showForLeaveControls()
+        controlsHider.showForHover()
         controlsHiddenForStylus = controlsHider.hidden
         Unit
     }
@@ -138,18 +132,13 @@ private fun CanvasScreen() {
                         return@pointerInteropFilter true
                     }
                     if (event.hasStylusOrEraserPointer()) {
-                        val insideControls = event.isInsideAny(toolbarBounds.value, debugChipBounds.value)
+                        val insideControls = toolbarBounds.value?.let { event.isInside(it) } == true
                         if (event.isStylusHoverEvent()) {
-                            if (insideControls) {
-                                showControlsForStylusHover()
-                            } else {
-                                showControlsForStylusLeave()
-                            }
-                        } else if (!insideControls) {
-                            showControlsForStylusLeave()
+                            showControlsForStylusHover()
                         } else if (
                             !controlsHiddenForStylus &&
                             event.isStylusPressEvent() &&
+                            insideControls &&
                             controlsHider.shouldHidePressInControls()
                         ) {
                             hideControlsForStylus()
@@ -234,30 +223,9 @@ private fun CanvasScreen() {
                 onToolbarBusyChanged = { toolbarBusy.value = it },
                 onModelChanged = refreshModel,
                 launchBackground = { block -> coroutineScope.launch { block() } },
-            )
-        }
-
-        if (BuildConfig.DEBUG && !controlsHiddenForStylus) {
-            AssistChip(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(16.dp)
-                    .onGloballyPositioned { coordinates ->
-                        debugChipBounds.value = coordinates.boundsInRoot()
-                    }
-                    .pointerInteropFilter { event ->
-                        if (event.isStylusHoverEvent()) {
-                            showControlsForStylusHover()
-                            false
-                        } else if (event.isStylusPressEvent() && controlsHider.shouldHidePressInControls()) {
-                            hideControlsForStylus()
-                            true
-                        } else {
-                            false
-                        }
-                    },
-                onClick = { debugOverlayVisible.value = !debugOverlayVisible.value },
-                label = { Text(if (debugOverlayVisible.value) "Debug On" else "Debug") },
+                debugEnabled = BuildConfig.DEBUG,
+                debugOverlayVisible = debugOverlayVisible.value,
+                onDebugOverlayChanged = { debugOverlayVisible.value = it },
             )
         }
 
@@ -294,6 +262,9 @@ private fun CanvasToolbar(
     onToolbarBusyChanged: (Boolean) -> Unit,
     onModelChanged: () -> Unit,
     launchBackground: (suspend () -> Unit) -> Unit,
+    debugEnabled: Boolean,
+    debugOverlayVisible: Boolean,
+    onDebugOverlayChanged: (Boolean) -> Unit,
 ) {
     Row(modifier = modifier) {
         AssistChip(
@@ -482,6 +453,13 @@ private fun CanvasToolbar(
                 label = { Text(if (layer.visible) "Hide" else "Show") },
             )
         }
+        if (debugEnabled) {
+            Box(modifier = Modifier.size(8.dp))
+            AssistChip(
+                onClick = { onDebugOverlayChanged(!debugOverlayVisible) },
+                label = { Text(if (debugOverlayVisible) "Debug On" else "Debug") },
+            )
+        }
     }
 }
 
@@ -564,15 +542,6 @@ private fun MotionEvent.isInside(bounds: Rect): Boolean {
             if (x >= bounds.left && x <= bounds.right && y >= bounds.top && y <= bounds.bottom) {
                 return true
             }
-        }
-    }
-    return false
-}
-
-private fun MotionEvent.isInsideAny(vararg bounds: Rect?): Boolean {
-    for (bound in bounds) {
-        if (bound != null && isInside(bound)) {
-            return true
         }
     }
     return false

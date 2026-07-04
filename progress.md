@@ -367,3 +367,18 @@
 ### Notes
 - 若后续改用 `graphicsLayer` 或矩阵绘制，需要重新验证绘制矩阵与 `toCanvas()` 逆变换仍然一致。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `MainActivity.kt` 与 progress 本轮修改。
+
+## 2026-07-05 - Task: 抽离输入调试叠加层到 debug 包
+
+### What was done
+- 新增 `io.github.lukasvi.hypainter.debug` 包，集中放置 `CanvasDebugOverlay`、`CanvasDebugState` 和 debug 格式化/Logcat 常量。
+- `MainActivity.kt` 移除调试叠加层 UI 和调试状态格式化实现，只保留输入路由生产逻辑与 debug state 发布入口。
+- 保持 `Debug` chip、overlay 显示内容和 `HyPainterInput` Logcat 行为不变。
+
+### Testing
+- `.\gradlew.bat :android:app:testDebugUnitTest`：通过。
+- `.\gradlew.bat :android:app:assembleDebug`：通过。
+
+### Notes
+- 这次是低粘性调试组件整理，为后续继续增加 frame time、event stream、pointer trace 等调试视图留出独立目录。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，删除 `debug/` 包并把 overlay/debug state 定义恢复到 `MainActivity.kt`。

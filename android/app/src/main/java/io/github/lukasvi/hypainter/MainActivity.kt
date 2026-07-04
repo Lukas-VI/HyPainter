@@ -11,7 +11,6 @@ import androidx.core.content.FileProvider
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -37,10 +36,16 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.unit.dp
+import io.github.lukasvi.hypainter.debug.DEBUG_LOG_INTERVAL_MS
+import io.github.lukasvi.hypainter.debug.DEBUG_LOG_TAG
+import io.github.lukasvi.hypainter.debug.CanvasDebugOverlay
+import io.github.lukasvi.hypainter.debug.CanvasDebugState
+import io.github.lukasvi.hypainter.debug.actionName
 import io.github.lukasvi.hypainter.engine.EngineSample
 import io.github.lukasvi.hypainter.engine.EngineStroke
 import io.github.lukasvi.hypainter.engine.PaintingEngine
 import io.github.lukasvi.hypainter.engine.createPaintingEngine
+import io.github.lukasvi.hypainter.debug.toolTypeName
 import java.io.File
 import kotlin.math.PI
 import kotlin.math.atan2
@@ -351,34 +356,6 @@ private class FrameInvalidator(
     }
 }
 
-@Composable
-private fun CanvasDebugOverlay(
-    modifier: Modifier,
-    state: CanvasDebugState,
-    viewport: ViewportState,
-    snapshot: io.github.lukasvi.hypainter.engine.EngineSnapshot,
-) {
-    Column(
-        modifier = modifier
-            .background(Color(0xCC101418))
-            .padding(12.dp),
-    ) {
-        Text("Input: ${state.route}", color = Color.White)
-        Text("Action: ${state.action}", color = Color.White)
-        Text("Tool: ${state.toolType} pointers=${state.pointerCount}", color = Color.White)
-        Text("Consumed: ${state.consumed}", color = Color.White)
-        Text("Samples: ${state.strokeSamples} history=${state.historySamples}", color = Color.White)
-        Text("Pressure: ${"%.2f".format(state.pressure)}", color = Color.White)
-        Text("Screen: ${state.screenPosition.format()}", color = Color.White)
-        Text("Canvas: ${state.canvasPosition.format()}", color = Color.White)
-        Text(
-            "View: pan=${viewport.pan.format()} scale=${"%.2f".format(viewport.scale)} rot=${"%.1f".format(viewport.rotation)}",
-            color = Color.White,
-        )
-        Text("Active stroke: ${snapshot.activeStroke?.points?.size ?: 0}", color = Color.White)
-    }
-}
-
 private class CanvasInputRouter {
     private var stylusPointerId: Int? = null
     private var lastTouchGesture: TouchGestureFrame? = null
@@ -629,26 +606,6 @@ private fun DrawScope.drawStroke(stroke: EngineStroke) {
     }
 }
 
-private data class CanvasDebugState(
-    val route: String = "idle",
-    val action: String = "none",
-    val toolType: String = "none",
-    val pointerCount: Int = 0,
-    val consumed: Boolean = false,
-    val pressure: Float = 0f,
-    val screenPosition: Offset = Offset.Unspecified,
-    val canvasPosition: Offset = Offset.Unspecified,
-    val strokeSamples: Int = 0,
-    val historySamples: Int = 0,
-) {
-    fun toLogLine(viewport: ViewportState): String {
-        return "route=$route action=$action tool=$toolType pointers=$pointerCount consumed=$consumed " +
-            "pressure=${"%.2f".format(pressure)} screen=${screenPosition.format()} canvas=${canvasPosition.format()} " +
-            "samples=$strokeSamples history=$historySamples pan=${viewport.pan.format()} " +
-            "scale=${"%.2f".format(viewport.scale)} rotation=${"%.1f".format(viewport.rotation)}"
-    }
-}
-
 private fun MotionEvent.actionPointerIsStylus(): Boolean {
     return actionIndex in 0 until pointerCount && isStylusPointer(actionIndex)
 }
@@ -710,36 +667,4 @@ private fun MotionEvent.toSample(
     )
 }
 
-private fun Offset.format(): String {
-    if (x.isNaN() || y.isNaN()) {
-        return "n/a"
-    }
-    return "${"%.1f".format(x)},${"%.1f".format(y)}"
-}
-
-private fun Int.toolTypeName(): String {
-    return when (this) {
-        MotionEvent.TOOL_TYPE_FINGER -> "finger"
-        MotionEvent.TOOL_TYPE_STYLUS -> "stylus"
-        MotionEvent.TOOL_TYPE_ERASER -> "eraser"
-        MotionEvent.TOOL_TYPE_MOUSE -> "mouse"
-        MotionEvent.TOOL_TYPE_UNKNOWN -> "unknown"
-        else -> "tool-$this"
-    }
-}
-
-private fun Int.actionName(): String {
-    return when (this) {
-        MotionEvent.ACTION_DOWN -> "down"
-        MotionEvent.ACTION_UP -> "up"
-        MotionEvent.ACTION_MOVE -> "move"
-        MotionEvent.ACTION_CANCEL -> "cancel"
-        MotionEvent.ACTION_POINTER_DOWN -> "pointer-down"
-        MotionEvent.ACTION_POINTER_UP -> "pointer-up"
-        else -> "action-$this"
-    }
-}
-
-private const val DEBUG_LOG_TAG = "HyPainterInput"
-private const val DEBUG_LOG_INTERVAL_MS = 250L
 private const val PRESSURE_REPORT_INTERVAL_MS = 80L

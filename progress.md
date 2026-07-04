@@ -382,3 +382,18 @@
 ### Notes
 - 这次是低粘性调试组件整理，为后续继续增加 frame time、event stream、pointer trace 等调试视图留出独立目录。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，删除 `debug/` 包并把 overlay/debug state 定义恢复到 `MainActivity.kt`。
+
+## 2026-07-05 - Task: 抽离画布输入路由到 input 包
+
+### What was done
+- 新增 `io.github.lukasvi.hypainter.input.CanvasInputRouter`，集中放置 stylus/finger 分层、pointer state、historical sample、debug publish 和 MotionEvent helper。
+- `MainActivity.kt` 删除输入状态机实现，只保留 Compose 组合、画布绘制和工具栏控制。
+- 保持现有输入行为不变：笔优先、单指保留事件流、双指变换、Debug overlay/Logcat 仍按开关启用。
+
+### Testing
+- `.\gradlew.bat :android:app:testDebugUnitTest`：通过。
+- `.\gradlew.bat :android:app:assembleDebug`：通过。
+
+### Notes
+- 这次是结构整理，为后续对输入状态机做单元测试或替换为更正式的事件管线留出边界。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，删除 `input/CanvasInputRouter.kt` 并把路由类与 helper 恢复到 `MainActivity.kt`。

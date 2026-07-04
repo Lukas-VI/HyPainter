@@ -756,3 +756,17 @@
 ### Notes
 - 正常绘制仍由 committed bitmap + active bitmap preview 渲染，功能输出不变；这次只减少实时路径里不必要的对象流。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `KotlinPaintingEngine.kt`、`CanvasInputRouter.kt` 和 progress 本轮修改。
+
+## 2026-07-05 - Task: 移除 native 实时预览 snapshot 桥接
+
+### What was done
+- `KotlinPaintingEngine` 暴露内部轻量 `activePreviewImage`，直接返回 active raster cache 的 `ImageBitmap` 引用。
+- `NativePaintingEngine.canvasSnapshot()` 不再调用 `fallbackPreview.canvasSnapshot()`，避免 native 实时绘制路径每帧为取 active preview 构造一份 fallback `EngineSnapshot`。
+- Native 实时 canvas snapshot 继续返回 committed display cache 与 active preview bitmap，功能输出保持一致。
+
+### Testing
+- `.\gradlew.bat :android:app:testDebugUnitTest`：通过。
+
+### Notes
+- 完整 `snapshot()` 仍保留 fallback preview 的 active stroke 信息，用于低频工具栏/保存等模型路径；本轮只收紧高频 canvas 绘制路径。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `KotlinPaintingEngine.kt`、`NativePaintingEngine.kt` 和 progress 本轮修改。

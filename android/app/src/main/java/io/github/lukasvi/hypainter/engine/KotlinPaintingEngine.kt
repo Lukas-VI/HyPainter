@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Color as AndroidColor
+import androidx.compose.ui.graphics.ImageBitmap
 import java.io.FileOutputStream
 
 class KotlinPaintingEngine(
@@ -20,6 +21,9 @@ class KotlinPaintingEngine(
     private val activeCache = StrokeRasterCache(canvasWidth, canvasHeight)
     private var activeLayerId = 1L
     private var nextLayerId = 2L
+
+    internal val activePreviewImage: ImageBitmap?
+        get() = activeCache.renderedImage
 
     override fun beginStroke(sample: EngineSample) {
         activeCache.clear()

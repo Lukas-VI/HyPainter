@@ -142,7 +142,6 @@ class NativePaintingEngine private constructor(
     }
 
     override fun canvasSnapshot(): EngineSnapshot {
-        val preview = fallbackPreview.canvasSnapshot()
         return EngineSnapshot(
             canvasWidth = canvasWidth,
             canvasHeight = canvasHeight,
@@ -150,9 +149,9 @@ class NativePaintingEngine private constructor(
             layers = layers,
             activeLayerId = activeLayerId,
             committedStrokes = emptyList(),
-            activeStroke = preview.activeStroke?.copy(layerId = activeLayerId),
+            activeStroke = null,
             renderedImage = displayCache.renderedImage,
-            activeImage = preview.activeImage,
+            activeImage = fallbackPreview.activePreviewImage,
         )
     }
 

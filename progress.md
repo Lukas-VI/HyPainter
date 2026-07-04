@@ -741,3 +741,18 @@
 ### Notes
 - 当前语义：按压进入 UI 区域会隐藏 controls；隐藏后必须出现 stylus hover 才显示 controls；显示后 hover armed，笔可点击 UI。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `MainActivity.kt`、`StylusControlsHider.kt`、`StylusControlsHiderTest.kt` 和 progress 本轮修改。
+
+## 2026-07-05 - Task: 降低实时绘制与 debug 高频分配
+
+### What was done
+- `KotlinPaintingEngine.canvasSnapshot()` 在已有 active bitmap preview 的实时绘制路径中不再额外包装 `activeStroke`，避免每帧为 fallback 绘制创建无用 `EngineStroke` 对象。
+- `NativePaintingEngine.canvasSnapshot()` 通过 fallback preview 同步受益，实时 native 预览也不再携带这份无用 active stroke 包装。
+- `CanvasInputRouter` 对 debug MOVE 发布做节流：非 MOVE 仍即时发布，MOVE 按 `DEBUG_LOG_INTERVAL_MS` 发布 overlay 状态和 Logcat，避免 debug 打开时每个输入 MOVE 都触发 heap 统计、debug state 分配和 Compose overlay 重组。
+- 移除未使用的 `lastDebugState` 与独立 log 节流字段，debug overlay 和 Logcat 使用同一低频发布节奏。
+
+### Testing
+- `.\gradlew.bat :android:app:testDebugUnitTest`：通过。
+
+### Notes
+- 正常绘制仍由 committed bitmap + active bitmap preview 渲染，功能输出不变；这次只减少实时路径里不必要的对象流。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `KotlinPaintingEngine.kt`、`CanvasInputRouter.kt` 和 progress 本轮修改。

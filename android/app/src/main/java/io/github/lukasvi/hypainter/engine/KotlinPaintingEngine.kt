@@ -140,9 +140,7 @@ class KotlinPaintingEngine(
             layers = layers,
             activeLayerId = activeLayerId,
             committedStrokes = emptyList(),
-            activeStroke = activeStroke.takeIf { it.isNotEmpty() }?.let {
-                EngineStroke(it, brush, activeLayerId)
-            },
+            activeStroke = null,
             renderedImage = displayCache.renderedImage,
             activeImage = activeCache.renderedImage,
         )

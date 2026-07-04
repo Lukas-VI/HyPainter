@@ -20,10 +20,9 @@ import kotlin.math.hypot
 
 internal class CanvasInputRouter {
     private val session = CanvasInputSession()
-    private var lastDebugState = CanvasDebugState()
     private var strokeSamples = 0
     private var historySamples = 0
-    private var lastLogTime = 0L
+    private var lastDebugPublishTime = 0L
     private var lastPressureReportTime = 0L
     private var recoveredStylusPointerOnLastEvent = false
 
@@ -210,6 +209,13 @@ internal class CanvasInputRouter {
             return
         }
 
+        val shouldPublish = event.actionMasked != MotionEvent.ACTION_MOVE ||
+            event.eventTime - lastDebugPublishTime >= DEBUG_LOG_INTERVAL_MS
+        if (!shouldPublish) {
+            return
+        }
+        lastDebugPublishTime = event.eventTime
+
         val runtime = Runtime.getRuntime()
         val totalMemory = runtime.totalMemory()
         val freeMemory = runtime.freeMemory()
@@ -246,13 +252,8 @@ internal class CanvasInputRouter {
             heapFreeKb = freeMemory / 1024L,
             heapMaxKb = maxMemory / 1024L,
         )
-        lastDebugState = next
         onDebugChanged(next)
-
-        if (event.eventTime - lastLogTime >= DEBUG_LOG_INTERVAL_MS || event.actionMasked != MotionEvent.ACTION_MOVE) {
-            lastLogTime = event.eventTime
-            Log.d(DEBUG_LOG_TAG, next.toLogLine(viewport))
-        }
+        Log.d(DEBUG_LOG_TAG, next.toLogLine(viewport))
     }
 }
 

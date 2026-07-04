@@ -36,6 +36,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.input.pointer.PointerType
+import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.layout.boundsInRoot
@@ -120,6 +121,11 @@ private fun CanvasScreen() {
         controlsHiddenForStylus = controlsHider.hidden
         Unit
     }
+    val showControlsAfterStylusHoverExit = {
+        controlsHider.showAfterHoverExit()
+        controlsHiddenForStylus = controlsHider.hidden
+        Unit
+    }
 
     Box(
         modifier = Modifier
@@ -142,7 +148,11 @@ private fun CanvasScreen() {
                     if (event.hasStylusOrEraserPointer()) {
                         val insideControls = toolbarBounds.value?.let { event.isInside(it) } == true
                         if (event.isStylusHoverEvent()) {
-                            showControlsForStylusHover()
+                            if (event.actionMasked == MotionEvent.ACTION_HOVER_EXIT) {
+                                showControlsAfterStylusHoverExit()
+                            } else {
+                                showControlsForStylusHover()
+                            }
                         } else if (
                             !controlsHiddenForStylus &&
                             event.isStylusPressEvent() &&
@@ -216,7 +226,11 @@ private fun CanvasScreen() {
                                         (change.type == PointerType.Stylus || change.type == PointerType.Eraser)
                                 }
                                 if (stylusHover) {
-                                    showControlsForStylusHover()
+                                    if (event.type == PointerEventType.Exit) {
+                                        showControlsAfterStylusHoverExit()
+                                    } else {
+                                        showControlsForStylusHover()
+                                    }
                                 }
                                 val stylusPressed = event.changes.any { change ->
                                     change.pressed &&

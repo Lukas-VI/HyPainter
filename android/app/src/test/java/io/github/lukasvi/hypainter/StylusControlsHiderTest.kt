@@ -47,4 +47,15 @@ class StylusControlsHiderTest {
 
         assertFalse(hider.shouldHidePressInControls())
     }
+
+    @Test
+    fun pressInControlsAfterHoverExitHidesAgain() {
+        val hider = StylusControlsHider()
+        hider.showForHover()
+
+        hider.showAfterHoverExit()
+
+        assertFalse(hider.hidden)
+        assertTrue(hider.shouldHidePressInControls())
+    }
 }

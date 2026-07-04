@@ -16,6 +16,11 @@ internal class StylusControlsHider {
         hoverArmed = true
     }
 
+    fun showAfterHoverExit() {
+        hidden = false
+        hoverArmed = false
+    }
+
     fun shouldHidePressInControls(): Boolean {
         return !hoverArmed
     }

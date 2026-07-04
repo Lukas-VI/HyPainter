@@ -819,3 +819,23 @@
 - 根因是上一轮轻量 `drainActiveStroke` 优化把 active cache 也清掉了，而 committed bitmap cache 的合并正依赖这份 active cache。
 - 当前预期：笔画 preview 抬笔后应留在 committed canvas；未 hover stylus press UI 隐藏；hover 后 stylus press UI 可点击；finger UI 点击仍不被消费。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `MainActivity.kt`、`KotlinPaintingEngine.kt` 和 progress 本轮修改。
+
+## 2026-07-05 - Task: 恢复 hover 退出后的 stylus UI 隐藏判定
+
+### What was done
+- `StylusControlsHider` 增加 `showAfterHoverExit()`：hover 离开时保持 controls 可见，但解除 hover armed 状态。
+- Canvas MotionEvent 路径区分 stylus hover enter/move 与 hover exit；exit 后下一次未 hover 的 stylus 直按 UI 会重新触发隐藏。
+- Toolbar Compose `pointerInput` 同步使用 `PointerEventType.Exit` 解除 hover armed，保留 hover 后按 UI 可点击的能力。
+- 新增 `StylusControlsHiderTest.pressInControlsAfterHoverExitHidesAgain`，锁住 hover 退出后的状态机语义。
+- 新增真机 instrumented test `PaintingEngineRasterCacheInstrumentedTest`，验证 `KotlinPaintingEngine.endStroke()` 会把 active preview 提交到 committed cache，并清空 active preview。
+
+### Testing
+- `.\gradlew.bat :android:app:testDebugUnitTest`：通过。
+- `.\gradlew.bat :android:app:assembleDebug --stacktrace`：通过。
+- `.\gradlew.bat :android:app:assembleDebugAndroidTest --stacktrace`：通过。
+- `.\gradlew.bat :android:app:connectedDebugAndroidTest`：在设备 `21051182C - 16` 上通过 1 条 instrumented test。
+- `.\gradlew.bat :android:app:installDebug`：已安装到在线设备。
+
+### Notes
+- 当前预期：hover 到 UI 后可以用笔点击 UI；hover 离开或 hover exit 后 UI 仍显示，但下一次无 hover 直接用笔碰 UI 会隐藏；finger 点击 UI 不受影响。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `MainActivity.kt`、`StylusControlsHider.kt`、`StylusControlsHiderTest.kt`、`PaintingEngineRasterCacheInstrumentedTest.kt` 和 progress 本轮修改。

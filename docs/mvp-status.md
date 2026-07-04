@@ -45,6 +45,8 @@ The draft project format is app-private text. It saves canvas size, layers, acti
 
 Canvas input is handled through a single MotionEvent router on the painting surface. Stylus and eraser pointers are consumed as drawing input and do not participate in viewport movement; two-finger finger touch drives pan, zoom, and rotation around the two-finger centroid; single-finger touch is left unconsumed for UI and future selection tools.
 
+Debug builds include a `Debug` toolbar chip that opens a low-friction input overlay. The same router also writes throttled Logcat lines under `HyPainterInput`, which can be watched with `adb logcat -s HyPainterInput` while testing long stylus strokes and two-finger transforms.
+
 ## Remaining Non-MVP Work
 
 - Replace the single-row toolbar with a proper tablet drawing UI.

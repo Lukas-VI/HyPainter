@@ -213,3 +213,20 @@
 - 参考 Jetpack Compose pointer input 文档后，当前选择不用通用 `detectTransformGestures`，而是在画布 surface 上统一处理事件优先级。
 - 当前仍缺真实 Android 平板手写笔长时间绘制验收；下一步应通过 Android Studio/ADB 在真机上观察 Logcat、帧率和输入中断情况。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `MainActivity.kt`、README、android/README、docs/mvp-status.md 和 progress 本轮修改。
+
+## 2026-07-05 - Task: 增加输入调试叠层并修复触摸流回归
+
+### What was done
+- 为 debug build 增加工具栏 `Debug` 开关，显示画布输入叠层：route、action、tool type、pointer count、pressure、sample counts、screen/canvas 坐标和 viewport transform。
+- 增加 `HyPainterInput` Logcat 输出，MOVE 事件按 250ms 节流，非 MOVE 事件即时记录。
+- 修复上一轮路由回归：`pointerInteropFilter` 在第一根 finger `ACTION_DOWN` 返回 `false` 会导致后续双指事件收不到；现在画布 finger stream 会先接管事件流，但只有双指才会改变画布视口。
+- 将 `.kotlin/` 加入 `.gitignore`，避免 Kotlin 本地 session 缓存进入工作区。
+
+### Testing
+- `.\gradlew.bat :android:app:assembleDebug`：通过。
+
+### Notes
+- 命令行调试入口：`adb logcat -s HyPainterInput`。
+- 屏幕叠层只在 `BuildConfig.DEBUG` 下显示，属于低粘性的调试组件，不进入 release 产品路径。
+- 当前仍需真机确认：单指在画布上不触发平移，第二根手指落下后双指 pan/zoom/rotation 恢复，stylus 绘制中 finger 事件不抢占。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `.gitignore`、`MainActivity.kt`、android/README、docs/mvp-status.md 和 progress 本轮修改。

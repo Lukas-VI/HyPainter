@@ -2,6 +2,7 @@ package io.github.lukasvi.hypainter
 
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import android.view.MotionEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -9,6 +10,7 @@ import androidx.core.content.FileProvider
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -71,6 +73,8 @@ private fun CanvasScreen() {
     val latestPressure = remember { mutableStateOf(0f) }
     val exportStatus = remember { mutableStateOf<String?>(null) }
     val projectStatus = remember { mutableStateOf<String?>(null) }
+    val debugOverlayVisible = remember { mutableStateOf(false) }
+    val debugState = remember { mutableStateOf(CanvasDebugState()) }
     val inputRouter = remember { CanvasInputRouter() }
     val snapshot = remember(version.value) { engine.snapshot() }
 
@@ -90,6 +94,7 @@ private fun CanvasScreen() {
                         onViewportChanged = { viewport.value = it },
                         onEngineChanged = { version.value++ },
                         onPressure = { latestPressure.value = it },
+                        onDebugChanged = { debugState.value = it },
                     )
                 },
         ) {
@@ -259,6 +264,24 @@ private fun CanvasScreen() {
                     label = { Text(if (layer.visible) "Hide" else "Show") },
                 )
             }
+            if (BuildConfig.DEBUG) {
+                Box(modifier = Modifier.size(8.dp))
+                AssistChip(
+                    onClick = { debugOverlayVisible.value = !debugOverlayVisible.value },
+                    label = { Text(if (debugOverlayVisible.value) "Debug On" else "Debug") },
+                )
+            }
+        }
+
+        if (BuildConfig.DEBUG && debugOverlayVisible.value) {
+            CanvasDebugOverlay(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(16.dp),
+                state = debugState.value,
+                viewport = viewport.value,
+                snapshot = snapshot,
+            )
         }
     }
 }
@@ -268,9 +291,42 @@ private fun BrushChip(label: String, onClick: () -> Unit) {
     AssistChip(onClick = onClick, label = { Text(label) })
 }
 
+@Composable
+private fun CanvasDebugOverlay(
+    modifier: Modifier,
+    state: CanvasDebugState,
+    viewport: ViewportState,
+    snapshot: io.github.lukasvi.hypainter.engine.EngineSnapshot,
+) {
+    Column(
+        modifier = modifier
+            .background(Color(0xCC101418))
+            .padding(12.dp),
+    ) {
+        Text("Input: ${state.route}", color = Color.White)
+        Text("Action: ${state.action}", color = Color.White)
+        Text("Tool: ${state.toolType} pointers=${state.pointerCount}", color = Color.White)
+        Text("Consumed: ${state.consumed}", color = Color.White)
+        Text("Samples: ${state.strokeSamples} history=${state.historySamples}", color = Color.White)
+        Text("Pressure: ${"%.2f".format(state.pressure)}", color = Color.White)
+        Text("Screen: ${state.screenPosition.format()}", color = Color.White)
+        Text("Canvas: ${state.canvasPosition.format()}", color = Color.White)
+        Text(
+            "View: pan=${viewport.pan.format()} scale=${"%.2f".format(viewport.scale)} rot=${"%.1f".format(viewport.rotation)}",
+            color = Color.White,
+        )
+        Text("Active stroke: ${snapshot.activeStroke?.points?.size ?: 0}", color = Color.White)
+    }
+}
+
 private class CanvasInputRouter {
     private var stylusPointerId: Int? = null
     private var lastTouchGesture: TouchGestureFrame? = null
+    private var lastDebugState = CanvasDebugState()
+    private var fingerStreamActive = false
+    private var strokeSamples = 0
+    private var historySamples = 0
+    private var lastLogTime = 0L
 
     fun onMotionEvent(
         event: MotionEvent,
@@ -279,12 +335,15 @@ private class CanvasInputRouter {
         onViewportChanged: (ViewportState) -> Unit,
         onEngineChanged: () -> Unit,
         onPressure: (Float) -> Unit,
+        onDebugChanged: (CanvasDebugState) -> Unit,
     ): Boolean {
-        if (stylusPointerId != null || event.actionPointerIsStylus()) {
-            return handleStylusEvent(event, viewport, engine, onEngineChanged, onPressure)
+        val consumed = if (stylusPointerId != null || event.actionPointerIsStylus()) {
+            handleStylusEvent(event, viewport, engine, onEngineChanged, onPressure)
+        } else {
+            handleTouchEvent(event, viewport, onViewportChanged)
         }
-
-        return handleTouchEvent(event, viewport, onViewportChanged)
+        publishDebug(event, viewport, consumed, onDebugChanged)
+        return consumed
     }
 
     private fun handleStylusEvent(
@@ -301,6 +360,8 @@ private class CanvasInputRouter {
                     return stylusPointerId != null
                 }
                 stylusPointerId = event.getPointerId(pointerIndex)
+                strokeSamples = 1
+                historySamples = 0
                 engine.beginStroke(event.toSample(pointerIndex, viewport, historicalIndex = null))
                 onPressure(event.getPressure(pointerIndex).coerceIn(0f, 1f))
                 onEngineChanged()
@@ -313,6 +374,8 @@ private class CanvasInputRouter {
                     engine.appendSample(event.toSample(pointerIndex, viewport, historyIndex))
                 }
                 engine.appendSample(event.toSample(pointerIndex, viewport, historicalIndex = null))
+                historySamples += event.historySize
+                strokeSamples += event.historySize + 1
                 onPressure(event.getPressure(pointerIndex).coerceIn(0f, 1f))
                 onEngineChanged()
                 return true
@@ -354,10 +417,16 @@ private class CanvasInputRouter {
         }
 
         when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                fingerStreamActive = true
+                lastTouchGesture = null
+                return true
+            }
+
             MotionEvent.ACTION_POINTER_DOWN, MotionEvent.ACTION_MOVE -> {
                 if (event.pointerCount < 2) {
                     lastTouchGesture = null
-                    return false
+                    return fingerStreamActive
                 }
 
                 val next = event.touchGestureFrame()
@@ -376,11 +445,14 @@ private class CanvasInputRouter {
 
             MotionEvent.ACTION_POINTER_UP, MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 lastTouchGesture = null
-                return false
+                if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
+                    fingerStreamActive = false
+                }
+                return fingerStreamActive
             }
         }
 
-        return false
+        return fingerStreamActive
     }
 
     private fun MotionEvent.findActiveStylusPointerIndex(): Int? {
@@ -391,6 +463,44 @@ private class CanvasInputRouter {
             return null
         }
         return pointerIndex
+    }
+
+    private fun publishDebug(
+        event: MotionEvent,
+        viewport: ViewportState,
+        consumed: Boolean,
+        onDebugChanged: (CanvasDebugState) -> Unit,
+    ) {
+        if (!BuildConfig.DEBUG) {
+            return
+        }
+
+        val pointerIndex = event.actionIndex.coerceIn(0, event.pointerCount - 1)
+        val screen = Offset(event.getX(pointerIndex), event.getY(pointerIndex))
+        val next = CanvasDebugState(
+            route = when {
+                stylusPointerId != null -> "stylus"
+                event.pointerCount >= 2 && event.allPointersAreFingers() -> "two-finger"
+                event.allPointersAreFingers() -> "single-finger"
+                else -> "ignored"
+            },
+            action = event.actionMasked.actionName(),
+            toolType = event.getToolType(pointerIndex).toolTypeName(),
+            pointerCount = event.pointerCount,
+            consumed = consumed,
+            pressure = event.getPressure(pointerIndex).coerceIn(0f, 1f),
+            screenPosition = screen,
+            canvasPosition = viewport.toCanvas(screen),
+            strokeSamples = strokeSamples,
+            historySamples = historySamples,
+        )
+        lastDebugState = next
+        onDebugChanged(next)
+
+        if (event.eventTime - lastLogTime >= DEBUG_LOG_INTERVAL_MS || event.actionMasked != MotionEvent.ACTION_MOVE) {
+            lastLogTime = event.eventTime
+            Log.d(DEBUG_LOG_TAG, next.toLogLine(viewport))
+        }
     }
 }
 
@@ -464,6 +574,26 @@ private data class TouchGestureFrame(
     val angleDegrees: Float,
 )
 
+private data class CanvasDebugState(
+    val route: String = "idle",
+    val action: String = "none",
+    val toolType: String = "none",
+    val pointerCount: Int = 0,
+    val consumed: Boolean = false,
+    val pressure: Float = 0f,
+    val screenPosition: Offset = Offset.Unspecified,
+    val canvasPosition: Offset = Offset.Unspecified,
+    val strokeSamples: Int = 0,
+    val historySamples: Int = 0,
+) {
+    fun toLogLine(viewport: ViewportState): String {
+        return "route=$route action=$action tool=$toolType pointers=$pointerCount consumed=$consumed " +
+            "pressure=${"%.2f".format(pressure)} screen=${screenPosition.format()} canvas=${canvasPosition.format()} " +
+            "samples=$strokeSamples history=$historySamples pan=${viewport.pan.format()} " +
+            "scale=${"%.2f".format(viewport.scale)} rotation=${"%.1f".format(viewport.rotation)}"
+    }
+}
+
 private fun MotionEvent.actionPointerIsStylus(): Boolean {
     return actionIndex in 0 until pointerCount && isStylusPointer(actionIndex)
 }
@@ -534,3 +664,36 @@ private fun rotate(offset: Offset, degrees: Float): Offset {
         y = offset.x * sinValue + offset.y * cosValue,
     )
 }
+
+private fun Offset.format(): String {
+    if (x.isNaN() || y.isNaN()) {
+        return "n/a"
+    }
+    return "${"%.1f".format(x)},${"%.1f".format(y)}"
+}
+
+private fun Int.toolTypeName(): String {
+    return when (this) {
+        MotionEvent.TOOL_TYPE_FINGER -> "finger"
+        MotionEvent.TOOL_TYPE_STYLUS -> "stylus"
+        MotionEvent.TOOL_TYPE_ERASER -> "eraser"
+        MotionEvent.TOOL_TYPE_MOUSE -> "mouse"
+        MotionEvent.TOOL_TYPE_UNKNOWN -> "unknown"
+        else -> "tool-$this"
+    }
+}
+
+private fun Int.actionName(): String {
+    return when (this) {
+        MotionEvent.ACTION_DOWN -> "down"
+        MotionEvent.ACTION_UP -> "up"
+        MotionEvent.ACTION_MOVE -> "move"
+        MotionEvent.ACTION_CANCEL -> "cancel"
+        MotionEvent.ACTION_POINTER_DOWN -> "pointer-down"
+        MotionEvent.ACTION_POINTER_UP -> "pointer-up"
+        else -> "action-$this"
+    }
+}
+
+private const val DEBUG_LOG_TAG = "HyPainterInput"
+private const val DEBUG_LOG_INTERVAL_MS = 250L

@@ -230,3 +230,19 @@
 - 屏幕叠层只在 `BuildConfig.DEBUG` 下显示，属于低粘性的调试组件，不进入 release 产品路径。
 - 当前仍需真机确认：单指在画布上不触发平移，第二根手指落下后双指 pan/zoom/rotation 恢复，stylus 绘制中 finger 事件不抢占。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `.gitignore`、`MainActivity.kt`、android/README、docs/mvp-status.md 和 progress 本轮修改。
+
+## 2026-07-05 - Task: 为画布视口坐标变换增加单测护栏
+
+### What was done
+- 将 `ViewportState`、`TouchGestureFrame` 和旋转数学从 `MainActivity.kt` 抽到 `CanvasViewport.kt`。
+- 为视口增加 `toScreen()`，用于调试与单测验证 screen/canvas 映射的互逆关系。
+- 新增 `CanvasViewportTest`，覆盖 pan/scale/rotation 下的坐标往返、双指中心锚定和 scale clamp 后的锚点稳定性。
+
+### Testing
+- `.\gradlew.bat :android:app:testDebugUnitTest`：通过。
+- `.\gradlew.bat :android:app:assembleDebug`：通过。
+
+### Notes
+- 这组测试直接约束本轮最容易回归的底层漏洞：旋转后的 screen-to-canvas 映射和双指变换中心。
+- 仍需要真机输入流验证，因为 JVM 单测不能证明厂商手写笔事件序列、掌触事件序列和 Compose/Android 分发细节。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，删除 `CanvasViewport.kt`、`CanvasViewportTest.kt`，并将视口数据结构恢复到 `MainActivity.kt`。

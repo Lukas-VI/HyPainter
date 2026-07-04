@@ -617,3 +617,18 @@
 - 这次针对用户日志中的 `up handleMs=57.25`，目标是让抬笔不再阻塞后续 hover/下一笔输入。
 - 导出/分享仍可能触发 Rust 文档重建和 PNG 压缩，但这些操作已经在 toolbar IO 路径中，不应参与 stylus MOVE/UP 热路径。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `StrokeRasterCache.kt`、engine、debug format 和 progress 本轮修改。
+
+## 2026-07-05 - Task: 笔接近工具栏时临时隐藏 UI
+
+### What was done
+- 顶部工具栏记录自身 root bounds，Canvas 收到 stylus/eraser pointer 且命中该区域时会临时隐藏工具栏约 1.2 秒，并消费这次 UI 命中，避免误画或按钮抢事件。
+- 顶部工具栏自身也会在收到 stylus/eraser hover/down 时立即隐藏；finger touch 仍可正常点击和横向滚动工具栏。
+- Debug chip 从顶部工具栏移到左下角，降低它对顶部绘制路径的干扰，同时保留调试入口。
+
+### Testing
+- `.\gradlew.bat :android:app:testDebugUnitTest`：通过。
+- `.\gradlew.bat :android:app:assembleDebug --stacktrace`：通过。
+
+### Notes
+- 这次是针对“笔碰到 UI 时让它暂时隐藏”的交互修复；当前是 MVP 级自动让路，后续正式 UI 应改成工具面板、浮动 palette 与 palm/stylus-aware hit test 体系。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `MainActivity.kt` 和 progress 本轮修改。

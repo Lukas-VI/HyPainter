@@ -2,6 +2,7 @@ package io.github.lukasvi.hypainter
 
 import android.content.Intent
 import android.os.Bundle
+import android.view.MotionEvent
 import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -25,15 +26,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.input.pointer.pointerInteropFilter
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import io.github.lukasvi.hypainter.debug.CanvasDebugOverlay
 import io.github.lukasvi.hypainter.debug.CanvasDebugState
@@ -78,6 +82,9 @@ private fun CanvasScreen() {
     val exportStatus = remember { mutableStateOf<String?>(null) }
     val projectStatus = remember { mutableStateOf<String?>(null) }
     val toolbarBusy = remember { mutableStateOf(false) }
+    val toolbarHiddenForStylus = remember { mutableStateOf(false) }
+    val toolbarBounds = remember { mutableStateOf<Rect?>(null) }
+    val toolbarHideGeneration = remember { mutableStateOf(0) }
     val debugOverlayVisible = remember { mutableStateOf(false) }
     val debugState = remember { mutableStateOf(CanvasDebugState()) }
     val coroutineScope = rememberCoroutineScope()
@@ -99,6 +106,20 @@ private fun CanvasScreen() {
         canvasVersion.value++
         Unit
     }
+    val hideToolbarForStylus = {
+        val generation = toolbarHideGeneration.value + 1
+        toolbarHideGeneration.value = generation
+        toolbarHiddenForStylus.value = true
+        view.postDelayed(
+            {
+                if (toolbarHideGeneration.value == generation) {
+                    toolbarHiddenForStylus.value = false
+                }
+            },
+            STYLUS_TOOLBAR_HIDE_MS,
+        )
+        Unit
+    }
 
     Box(
         modifier = Modifier
@@ -110,6 +131,13 @@ private fun CanvasScreen() {
                 .fillMaxSize()
                 .pointerInteropFilter { event ->
                     if (toolbarBusy.value) {
+                        return@pointerInteropFilter true
+                    }
+                    if (!toolbarHiddenForStylus.value &&
+                        event.hasStylusOrEraserPointer() &&
+                        toolbarBounds.value?.let { event.isInside(it) } == true
+                    ) {
+                        hideToolbarForStylus()
                         return@pointerInteropFilter true
                     }
                     inputRouter.onMotionEvent(
@@ -158,26 +186,47 @@ private fun CanvasScreen() {
             }
         }
 
-        CanvasToolbar(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(16.dp)
-                .horizontalScroll(rememberScrollState()),
-            context = context,
-            engine = engine,
-            snapshot = toolbarSnapshot,
-            latestPressure = latestPressure.value,
-            exportStatus = exportStatus.value,
-            projectStatus = projectStatus.value,
-            toolbarBusy = toolbarBusy.value,
-            debugOverlayVisible = debugOverlayVisible.value,
-            onExportStatusChanged = { exportStatus.value = it },
-            onProjectStatusChanged = { projectStatus.value = it },
-            onDebugOverlayChanged = { debugOverlayVisible.value = it },
-            onToolbarBusyChanged = { toolbarBusy.value = it },
-            onModelChanged = refreshModel,
-            launchBackground = { block -> coroutineScope.launch { block() } },
-        )
+        if (!toolbarHiddenForStylus.value) {
+            CanvasToolbar(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(16.dp)
+                    .onGloballyPositioned { coordinates ->
+                        toolbarBounds.value = coordinates.boundsInRoot()
+                    }
+                    .pointerInteropFilter { event ->
+                        if (event.hasStylusOrEraserPointer()) {
+                            hideToolbarForStylus()
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    .horizontalScroll(rememberScrollState()),
+                context = context,
+                engine = engine,
+                snapshot = toolbarSnapshot,
+                latestPressure = latestPressure.value,
+                exportStatus = exportStatus.value,
+                projectStatus = projectStatus.value,
+                toolbarBusy = toolbarBusy.value,
+                onExportStatusChanged = { exportStatus.value = it },
+                onProjectStatusChanged = { projectStatus.value = it },
+                onToolbarBusyChanged = { toolbarBusy.value = it },
+                onModelChanged = refreshModel,
+                launchBackground = { block -> coroutineScope.launch { block() } },
+            )
+        }
+
+        if (BuildConfig.DEBUG) {
+            AssistChip(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(16.dp),
+                onClick = { debugOverlayVisible.value = !debugOverlayVisible.value },
+                label = { Text(if (debugOverlayVisible.value) "Debug On" else "Debug") },
+            )
+        }
 
         if (BuildConfig.DEBUG && debugOverlayVisible.value) {
             CanvasDebugOverlay(
@@ -207,10 +256,8 @@ private fun CanvasToolbar(
     exportStatus: String?,
     projectStatus: String?,
     toolbarBusy: Boolean,
-    debugOverlayVisible: Boolean,
     onExportStatusChanged: (String) -> Unit,
     onProjectStatusChanged: (String) -> Unit,
-    onDebugOverlayChanged: (Boolean) -> Unit,
     onToolbarBusyChanged: (Boolean) -> Unit,
     onModelChanged: () -> Unit,
     launchBackground: (suspend () -> Unit) -> Unit,
@@ -402,13 +449,6 @@ private fun CanvasToolbar(
                 label = { Text(if (layer.visible) "Hide" else "Show") },
             )
         }
-        if (BuildConfig.DEBUG) {
-            Box(modifier = Modifier.size(8.dp))
-            AssistChip(
-                onClick = { onDebugOverlayChanged(!debugOverlayVisible) },
-                label = { Text(if (debugOverlayVisible) "Debug On" else "Debug") },
-            )
-        }
     }
 }
 
@@ -456,6 +496,30 @@ private class FrameInvalidator(
             onFrame()
         }
     }
+}
+
+private fun MotionEvent.hasStylusOrEraserPointer(): Boolean {
+    for (index in 0 until pointerCount) {
+        val toolType = getToolType(index)
+        if (toolType == MotionEvent.TOOL_TYPE_STYLUS || toolType == MotionEvent.TOOL_TYPE_ERASER) {
+            return true
+        }
+    }
+    return false
+}
+
+private fun MotionEvent.isInside(bounds: Rect): Boolean {
+    for (index in 0 until pointerCount) {
+        val toolType = getToolType(index)
+        if (toolType == MotionEvent.TOOL_TYPE_STYLUS || toolType == MotionEvent.TOOL_TYPE_ERASER) {
+            val x = getX(index)
+            val y = getY(index)
+            if (x >= bounds.left && x <= bounds.right && y >= bounds.top && y <= bounds.bottom) {
+                return true
+            }
+        }
+    }
+    return false
 }
 
 private fun DrawScope.withTransformCompat(
@@ -511,3 +575,5 @@ private fun io.github.lukasvi.hypainter.engine.EngineSnapshot.layerIsVisible(lay
     }
     return false
 }
+
+private const val STYLUS_TOOLBAR_HIDE_MS = 1200L

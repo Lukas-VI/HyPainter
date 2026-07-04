@@ -323,3 +323,19 @@
 - 这次继续针对长时间 stylus 绘制卡顿路径，减少 frame-throttled preview 内仍会发生的 O(n) 列表复制和绘制分配。
 - active stroke 仍在主线程输入/绘制路径使用，当前没有并发访问；若未来引入后台渲染，需要重新评估 snapshot 的不可变边界。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，恢复 active stroke `toList()` 和 `zipWithNext()` 绘制。
+
+## 2026-07-05 - Task: 拆分画布预览刷新与工具栏模型刷新
+
+### What was done
+- 将单一 `version` 拆为 `canvasVersion` 与 `modelVersion`，stylus MOVE 只刷新画布预览 snapshot。
+- 新增 `CanvasToolbar` composable，工具栏使用独立的 `toolbarSnapshot`，只有笔刷、图层、加载、清空、撤销等模型操作才刷新。
+- 保持按钮行为、导出/分享、项目保存加载和 Debug overlay 开关不变。
+
+### Testing
+- `.\gradlew.bat :android:app:testDebugUnitTest`：通过。
+- `.\gradlew.bat :android:app:assembleDebug`：通过。
+
+### Notes
+- 这次继续降低长笔画期间工具栏参与高频重组的概率，让 active stroke preview 与按钮区模型状态分离。
+- 后续如果仍有按钮卡顿，应进一步把工具栏变为常驻控制面板状态模型，避免直接读取完整 engine snapshot。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，恢复 `CanvasScreen` 内联工具栏和单一 `version` 计数。

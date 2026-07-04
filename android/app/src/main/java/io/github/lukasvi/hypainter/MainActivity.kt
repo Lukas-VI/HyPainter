@@ -69,7 +69,8 @@ private fun CanvasScreen() {
     val context = LocalContext.current
     val view = LocalView.current
     val engine = remember { createPaintingEngine() }
-    val version = remember { mutableStateOf(0) }
+    val canvasVersion = remember { mutableStateOf(0) }
+    val modelVersion = remember { mutableStateOf(0) }
     val viewport = remember { mutableStateOf(ViewportState()) }
     val latestPressure = remember { mutableStateOf(0f) }
     val exportStatus = remember { mutableStateOf<String?>(null) }
@@ -79,10 +80,20 @@ private fun CanvasScreen() {
     val inputRouter = remember { CanvasInputRouter() }
     val frameInvalidator = remember(view) {
         FrameInvalidator(view) {
-            version.value++
+            canvasVersion.value++
         }
     }
-    val snapshot = remember(version.value) { engine.snapshot() }
+    val snapshot = remember(canvasVersion.value) { engine.snapshot() }
+    val toolbarSnapshot = remember(modelVersion.value) { engine.snapshot() }
+    val refreshCanvas = {
+        canvasVersion.value++
+        Unit
+    }
+    val refreshModel = {
+        modelVersion.value++
+        canvasVersion.value++
+        Unit
+    }
 
     Box(
         modifier = Modifier
@@ -98,7 +109,7 @@ private fun CanvasScreen() {
                         viewport = viewport.value,
                         engine = engine,
                         onViewportChanged = { viewport.value = it },
-                        onEngineChanged = { version.value++ },
+                        onEngineChanged = refreshCanvas,
                         onEngineChangedNextFrame = { frameInvalidator.request() },
                         onPressure = { latestPressure.value = it },
                         debugEnabled = debugOverlayVisible.value,
@@ -119,167 +130,23 @@ private fun CanvasScreen() {
             }
         }
 
-        Row(
+        CanvasToolbar(
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .padding(16.dp)
                 .horizontalScroll(rememberScrollState()),
-        ) {
-            AssistChip(
-                onClick = {
-                    engine.clear()
-                    version.value++
-                },
-                label = { Text("Clear") },
-            )
-            Box(modifier = Modifier.size(8.dp))
-            AssistChip(
-                onClick = {
-                    engine.undo()
-                    version.value++
-                },
-                label = { Text("Undo") },
-            )
-            Box(modifier = Modifier.size(8.dp))
-            AssistChip(
-                onClick = {},
-                label = {
-                    Text(
-                        "${if (engine.nativeBacked) "Native" else "Kotlin"} · Pressure ${
-                            "%.2f".format(latestPressure.value)
-                        }",
-                    )
-                },
-            )
-            Box(modifier = Modifier.size(8.dp))
-            BrushChip("Black") {
-                engine.setBrush(snapshot.brush.copy(colorArgb = 0xff000000.toInt()))
-                version.value++
-            }
-            Box(modifier = Modifier.size(8.dp))
-            BrushChip("Red") {
-                engine.setBrush(snapshot.brush.copy(colorArgb = 0xffd72638.toInt()))
-                version.value++
-            }
-            Box(modifier = Modifier.size(8.dp))
-            BrushChip("Blue") {
-                engine.setBrush(snapshot.brush.copy(colorArgb = 0xff2563eb.toInt()))
-                version.value++
-            }
-            Box(modifier = Modifier.size(8.dp))
-            AssistChip(
-                onClick = {
-                    engine.setBrush(snapshot.brush.copy(radiusPx = (snapshot.brush.radiusPx - 2f).coerceAtLeast(2f)))
-                    version.value++
-                },
-                label = { Text("-") },
-            )
-            Box(modifier = Modifier.size(8.dp))
-            AssistChip(
-                onClick = {
-                    engine.setBrush(snapshot.brush.copy(radiusPx = (snapshot.brush.radiusPx + 2f).coerceAtMost(48f)))
-                    version.value++
-                },
-                label = { Text("Size ${snapshot.brush.radiusPx.toInt()}") },
-            )
-            Box(modifier = Modifier.size(8.dp))
-            AssistChip(
-                onClick = {
-                    val output = File(context.filesDir, "hypainter-export.png")
-                    exportStatus.value = if (engine.exportPng(output.absolutePath)) {
-                        "Exported"
-                    } else {
-                        "Export failed"
-                    }
-                },
-                label = { Text(exportStatus.value ?: "Export") },
-            )
-            Box(modifier = Modifier.size(8.dp))
-            AssistChip(
-                onClick = {
-                    val output = File(context.filesDir, "hypainter-export.png")
-                    if (engine.exportPng(output.absolutePath)) {
-                        val uri = FileProvider.getUriForFile(
-                            context,
-                            "${context.packageName}.fileprovider",
-                            output,
-                        )
-                        val share = Intent(Intent.ACTION_SEND).apply {
-                            type = "image/png"
-                            putExtra(Intent.EXTRA_STREAM, uri)
-                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        }
-                        context.startActivity(Intent.createChooser(share, "Share HyPainter export"))
-                        exportStatus.value = "Shared"
-                    } else {
-                        exportStatus.value = "Share failed"
-                    }
-                },
-                label = { Text("Share") },
-            )
-            Box(modifier = Modifier.size(8.dp))
-            AssistChip(
-                onClick = {
-                    val output = File(context.filesDir, "hypainter-project.hyp")
-                    projectStatus.value = if (engine.saveProject(output.absolutePath)) {
-                        "Saved"
-                    } else {
-                        "Save failed"
-                    }
-                },
-                label = { Text(projectStatus.value ?: "Save") },
-            )
-            Box(modifier = Modifier.size(8.dp))
-            AssistChip(
-                onClick = {
-                    val input = File(context.filesDir, "hypainter-project.hyp")
-                    projectStatus.value = if (engine.loadProject(input.absolutePath)) {
-                        version.value++
-                        "Loaded"
-                    } else {
-                        "Load failed"
-                    }
-                },
-                label = { Text("Load") },
-            )
-            Box(modifier = Modifier.size(8.dp))
-            AssistChip(
-                onClick = {
-                    engine.addLayer()
-                    version.value++
-                },
-                label = { Text("+ Layer") },
-            )
-            snapshot.layers.forEach { layer ->
-                Box(modifier = Modifier.size(8.dp))
-                AssistChip(
-                    onClick = {
-                        engine.selectLayer(layer.id)
-                        version.value++
-                    },
-                    label = {
-                        Text(
-                            "${if (layer.id == snapshot.activeLayerId) "*" else ""}${layer.name}",
-                        )
-                    },
-                )
-                Box(modifier = Modifier.size(8.dp))
-                AssistChip(
-                    onClick = {
-                        engine.toggleLayerVisibility(layer.id)
-                        version.value++
-                    },
-                    label = { Text(if (layer.visible) "Hide" else "Show") },
-                )
-            }
-            if (BuildConfig.DEBUG) {
-                Box(modifier = Modifier.size(8.dp))
-                AssistChip(
-                    onClick = { debugOverlayVisible.value = !debugOverlayVisible.value },
-                    label = { Text(if (debugOverlayVisible.value) "Debug On" else "Debug") },
-                )
-            }
-        }
+            context = context,
+            engine = engine,
+            snapshot = toolbarSnapshot,
+            latestPressure = latestPressure.value,
+            exportStatus = exportStatus.value,
+            projectStatus = projectStatus.value,
+            debugOverlayVisible = debugOverlayVisible.value,
+            onExportStatusChanged = { exportStatus.value = it },
+            onProjectStatusChanged = { projectStatus.value = it },
+            onDebugOverlayChanged = { debugOverlayVisible.value = it },
+            onModelChanged = refreshModel,
+        )
 
         if (BuildConfig.DEBUG && debugOverlayVisible.value) {
             CanvasDebugOverlay(
@@ -297,6 +164,173 @@ private fun CanvasScreen() {
 @Composable
 private fun BrushChip(label: String, onClick: () -> Unit) {
     AssistChip(onClick = onClick, label = { Text(label) })
+}
+
+@Composable
+private fun CanvasToolbar(
+    modifier: Modifier,
+    context: android.content.Context,
+    engine: PaintingEngine,
+    snapshot: io.github.lukasvi.hypainter.engine.EngineSnapshot,
+    latestPressure: Float,
+    exportStatus: String?,
+    projectStatus: String?,
+    debugOverlayVisible: Boolean,
+    onExportStatusChanged: (String) -> Unit,
+    onProjectStatusChanged: (String) -> Unit,
+    onDebugOverlayChanged: (Boolean) -> Unit,
+    onModelChanged: () -> Unit,
+) {
+    Row(modifier = modifier) {
+        AssistChip(
+            onClick = {
+                engine.clear()
+                onModelChanged()
+            },
+            label = { Text("Clear") },
+        )
+        Box(modifier = Modifier.size(8.dp))
+        AssistChip(
+            onClick = {
+                engine.undo()
+                onModelChanged()
+            },
+            label = { Text("Undo") },
+        )
+        Box(modifier = Modifier.size(8.dp))
+        AssistChip(
+            onClick = {},
+            label = {
+                Text(
+                    "${if (engine.nativeBacked) "Native" else "Kotlin"} · Pressure ${
+                        "%.2f".format(latestPressure)
+                    }",
+                )
+            },
+        )
+        Box(modifier = Modifier.size(8.dp))
+        BrushChip("Black") {
+            engine.setBrush(snapshot.brush.copy(colorArgb = 0xff000000.toInt()))
+            onModelChanged()
+        }
+        Box(modifier = Modifier.size(8.dp))
+        BrushChip("Red") {
+            engine.setBrush(snapshot.brush.copy(colorArgb = 0xffd72638.toInt()))
+            onModelChanged()
+        }
+        Box(modifier = Modifier.size(8.dp))
+        BrushChip("Blue") {
+            engine.setBrush(snapshot.brush.copy(colorArgb = 0xff2563eb.toInt()))
+            onModelChanged()
+        }
+        Box(modifier = Modifier.size(8.dp))
+        AssistChip(
+            onClick = {
+                engine.setBrush(snapshot.brush.copy(radiusPx = (snapshot.brush.radiusPx - 2f).coerceAtLeast(2f)))
+                onModelChanged()
+            },
+            label = { Text("-") },
+        )
+        Box(modifier = Modifier.size(8.dp))
+        AssistChip(
+            onClick = {
+                engine.setBrush(snapshot.brush.copy(radiusPx = (snapshot.brush.radiusPx + 2f).coerceAtMost(48f)))
+                onModelChanged()
+            },
+            label = { Text("Size ${snapshot.brush.radiusPx.toInt()}") },
+        )
+        Box(modifier = Modifier.size(8.dp))
+        AssistChip(
+            onClick = {
+                val output = File(context.filesDir, "hypainter-export.png")
+                onExportStatusChanged(if (engine.exportPng(output.absolutePath)) "Exported" else "Export failed")
+            },
+            label = { Text(exportStatus ?: "Export") },
+        )
+        Box(modifier = Modifier.size(8.dp))
+        AssistChip(
+            onClick = {
+                val output = File(context.filesDir, "hypainter-export.png")
+                if (engine.exportPng(output.absolutePath)) {
+                    val uri = FileProvider.getUriForFile(
+                        context,
+                        "${context.packageName}.fileprovider",
+                        output,
+                    )
+                    val share = Intent(Intent.ACTION_SEND).apply {
+                        type = "image/png"
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    context.startActivity(Intent.createChooser(share, "Share HyPainter export"))
+                    onExportStatusChanged("Shared")
+                } else {
+                    onExportStatusChanged("Share failed")
+                }
+            },
+            label = { Text("Share") },
+        )
+        Box(modifier = Modifier.size(8.dp))
+        AssistChip(
+            onClick = {
+                val output = File(context.filesDir, "hypainter-project.hyp")
+                onProjectStatusChanged(if (engine.saveProject(output.absolutePath)) "Saved" else "Save failed")
+            },
+            label = { Text(projectStatus ?: "Save") },
+        )
+        Box(modifier = Modifier.size(8.dp))
+        AssistChip(
+            onClick = {
+                val input = File(context.filesDir, "hypainter-project.hyp")
+                onProjectStatusChanged(
+                    if (engine.loadProject(input.absolutePath)) {
+                        onModelChanged()
+                        "Loaded"
+                    } else {
+                        "Load failed"
+                    },
+                )
+            },
+            label = { Text("Load") },
+        )
+        Box(modifier = Modifier.size(8.dp))
+        AssistChip(
+            onClick = {
+                engine.addLayer()
+                onModelChanged()
+            },
+            label = { Text("+ Layer") },
+        )
+        snapshot.layers.forEach { layer ->
+            Box(modifier = Modifier.size(8.dp))
+            AssistChip(
+                onClick = {
+                    engine.selectLayer(layer.id)
+                    onModelChanged()
+                },
+                label = {
+                    Text(
+                        "${if (layer.id == snapshot.activeLayerId) "*" else ""}${layer.name}",
+                    )
+                },
+            )
+            Box(modifier = Modifier.size(8.dp))
+            AssistChip(
+                onClick = {
+                    engine.toggleLayerVisibility(layer.id)
+                    onModelChanged()
+                },
+                label = { Text(if (layer.visible) "Hide" else "Show") },
+            )
+        }
+        if (BuildConfig.DEBUG) {
+            Box(modifier = Modifier.size(8.dp))
+            AssistChip(
+                onClick = { onDebugOverlayChanged(!debugOverlayVisible) },
+                label = { Text(if (debugOverlayVisible) "Debug On" else "Debug") },
+            )
+        }
+    }
 }
 
 private class FrameInvalidator(

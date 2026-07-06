@@ -7,11 +7,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.requiredWidth
+import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -19,6 +22,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
+import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
@@ -318,13 +323,12 @@ private fun VerticalHudSlider(
     enabled: Boolean,
     onValueChange: (Float) -> Unit,
 ) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box(modifier = Modifier.size(width = 48.dp, height = 142.dp), contentAlignment = Alignment.Center) {
             Slider(
                 modifier = Modifier
-                    .width(132.dp)
-                    .height(36.dp)
+                    .requiredWidth(132.dp)
+                    .requiredHeight(36.dp)
                     .graphicsLayer(rotationZ = -90f),
                 value = value,
                 onValueChange = onValueChange,

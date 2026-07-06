@@ -863,3 +863,60 @@
 - 这是完整系统骨架的第一个节点，不追求最终 UI 视觉，只先建立文件/画布/视图命令入口和职责分离。
 - Draft load 通过 `ProjectCodec` 先读取画布尺寸，再创建匹配尺寸的 engine 后加载，避免旧固定尺寸 engine 承载不同尺寸项目。
 - 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原 `MainActivity.kt`、`docs/current-architecture.md` 和 progress 本轮修改。
+
+## 2026-07-05 - Task: 接入系统壁纸动态 UI 主题色
+
+### What was done
+- 新增 Compose 主题入口，Android 12+ 默认使用 Material You 动态色，从系统壁纸生成 UI 色板。
+- 在 `View` 菜单加入 `Wallpaper Colors` 开关；旧系统显示为不可用项，关闭后回落到固定 HyPainter 明暗主题。
+- 将应用壳层背景和顶部命令栏接到 `MaterialTheme.colorScheme`，但画布像素、笔刷颜色、导出内容不受 UI 主题影响。
+- `docs/current-architecture.md` 同步记录主题模块职责与边界。
+
+### Testing
+- `.\gradlew.bat :android:app:assembleDebug --stacktrace`：通过。
+- `.\gradlew.bat :android:app:testDebugUnitTest`：通过。
+
+### Notes
+- 改动文件：`android/app/src/main/java/io/github/lukasvi/hypainter/ui/HyPainterTheme.kt` 新增动态色主题入口；`android/app/src/main/java/io/github/lukasvi/hypainter/MainActivity.kt` 接入主题开关和主题色；`docs/current-architecture.md` 记录主题边界；`progress.md` 追加本轮记录。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原上述四个文件或删除新增 `ui/HyPainterTheme.kt`。
+- 设备安装补充：`.\gradlew.bat :android:app:installDebug` 因 `No connected devices!` 未完成，debug APK 已构建但未安装到平板。
+
+## 2026-07-05 - Task: 按草图改为画布浮动 HUD UI
+
+### What was done
+- 移除固定顶部命令栏，画布改为全屏铺底，常用命令通过浮动 HUD 覆盖在画布之上。
+- 新增左侧快捷 HUD：Undo、Clear、Brush、常用颜色、颜色入口和笔刷大小滑条。
+- 新增右上浮动工具胶囊：保留 File/Canvas/View 菜单，并提供 Brush、Color、Layers 面板入口。
+- 新增右侧浮动 inspector 面板：Brush 调整、Layers 添加/选择/显隐、Color 色板选择。
+- 新增底部半透明状态 chip，显示文档、引擎、采样、压力和保存/导出状态。
+- 清理被新 HUD 取代的旧固定命令栏和横向快速工具条孤儿代码。
+- `docs/current-architecture.md` 同步更新当前 UI 壳层职责。
+
+### Testing
+- `.\gradlew.bat :android:app:assembleDebug --stacktrace`：通过。
+- `.\gradlew.bat :android:app:testDebugUnitTest`：通过。
+
+### Notes
+- 当前没有实现 Redo，因为 `PaintingEngine` 目前只暴露 `undo()`；不做假按钮，后续应先补引擎 redo 协议再接 UI。
+- 改动文件：`android/app/src/main/java/io/github/lukasvi/hypainter/MainActivity.kt` 改为浮动 HUD 与 inspector；`docs/current-architecture.md` 更新 HUD 架构说明；`progress.md` 追加本轮记录。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原上述三个文件。
+
+## 2026-07-05 - Task: 拆分 HUD 组件并按草图改为图标工具栏
+
+### What was done
+- 将 HUD 与 inspector 组件从 `MainActivity.kt` 拆到 `ui/HudComponents.kt`，`MainActivity.kt` 从 1247 行降到 667 行。
+- 新增 `ui/LucideIcons.kt`，提供本地 Lucide 风格图标子集，避免第三方图标库或设计工具继续阻塞 HUD 迭代。
+- 左 HUD 按草图顺序调整为：笔刷库、快捷笔刷 1/2/3 button group、透明度条、大小条。
+- 右上浮动 toolbar 按草图顺序调整为：菜单、选区、变换、工具、颜色、图层。
+- 未完成的选区、变换、工具和透明度协议均保留可见占位；选区/变换通过状态 chip 给反馈，透明度暂存 UI 状态并加注释说明尚未写入引擎。
+- 菜单内容迁移到浮动 inspector 的 `Menu` 面板，保留新建画布、保存/加载、导出/分享、画布设置、视图采样、壁纸色和 debug overlay 入口。
+- `docs/current-architecture.md` 同步记录 HUD 组件拆分和图标边界。
+
+### Testing
+- `.\gradlew.bat :android:app:testDebugUnitTest`：通过。
+- `.\gradlew.bat :android:app:assembleDebug --stacktrace`：通过。
+- `cargo test -p hyp_compositor`：通过。
+
+### Notes
+- 改动文件：`android/app/src/main/java/io/github/lukasvi/hypainter/MainActivity.kt` 精简为状态/引擎/文件 IO 接线；`android/app/src/main/java/io/github/lukasvi/hypainter/ui/HudComponents.kt` 新增 HUD、toolbar、inspector 和菜单组件；`android/app/src/main/java/io/github/lukasvi/hypainter/ui/LucideIcons.kt` 新增本地图标子集；`rust/crates/HyP_compositor/src/lib.rs` 补充公开合成语义注释；`docs/current-architecture.md` 更新架构说明；`progress.md` 追加本轮记录。
+- 回滚方式：执行 `git revert <本轮提交哈希>`；如未提交，还原上述六个文件并删除新增 `HudComponents.kt`、`LucideIcons.kt`。

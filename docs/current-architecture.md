@@ -26,6 +26,7 @@ flowchart TD
     Input --> EngineApi["engine/PaintingEngine"]
 
     Main --> AppShell["App command bar / dialogs / paint controls"]
+    Main --> Theme["ui/HyPainterTheme"]
     Main --> RenderOptions["render/BitmapSampling"]
     Main --> Debug["debug/CanvasDebugOverlay"]
 
@@ -76,17 +77,44 @@ sequenceDiagram
 Current role:
 
 - Hosts the Compose painting screen.
-- Owns top-level UI state: document title, viewport, pressure, command status, debug overlay, render options, and project/export status.
+- Owns top-level UI state: document title, viewport, pressure, command status, debug overlay, render options, wallpaper color toggle, and project/export status.
 - Connects `CanvasInputRouter` to `PaintingEngine`.
 - Draws cached committed image plus active stroke preview.
-- Provides the current app shell: `File`, `Canvas`, and `View` menus, new-canvas dialog, canvas settings dialog, and quick paint controls.
-- Keeps command UI outside the drawing surface so toolbar events do not compete with canvas stylus input.
+- Provides the current HUD shell: floating `File`, `Canvas`, and `View` menus, left quick tools, bottom status chip, and right-side floating Brush/Layers/Color inspector panels.
+- Keeps command UI as small floating surfaces over the drawing stage rather than fixed bars around the canvas.
 
 Boundary to preserve:
 
 - It may coordinate modules, but should not grow into the document model.
 - It should not manually manipulate stroke internals.
-- The current app shell should eventually split into dedicated UI components and a product command layer.
+- The current HUD shell should eventually split into dedicated UI components and a product command layer.
+
+### `ui/HyPainterTheme.kt`
+
+Current role:
+
+- Provides the Compose `MaterialTheme` wrapper for the Android app shell.
+- Uses Android 12+ Material You dynamic color schemes when the user enables `Wallpaper Colors`.
+- Falls back to fixed HyPainter light/dark color schemes on older Android versions or when wallpaper colors are disabled.
+
+Boundary to preserve:
+
+- Theme colors affect UI chrome and Material controls only.
+- Canvas pixels, brush colors, exports, and project data must not change because the UI theme changes.
+
+### `ui/HudComponents.kt` and `ui/LucideIcons.kt`
+
+Current role:
+
+- Defines the floating tablet drawing HUD outside `MainActivity`.
+- Left HUD follows the sketch order: brush library, three quick brush buttons, opacity slider, and size slider.
+- Right-top toolbar follows the sketch order: menu, selection, transform, tool, color, and layers.
+- `LucideIcons.kt` provides a small local Lucide-style icon subset so HUD iteration is not blocked by external design-kit or icon-library availability.
+
+Boundary to preserve:
+
+- HUD components issue product-level callbacks and engine commands; they should not own document truth.
+- Placeholder controls should remain visible but clearly route through callbacks until the engine protocol supports them.
 
 ### `CanvasViewport.kt`
 
@@ -244,7 +272,7 @@ Current role:
 Status:
 
 - Current default matches the requirement for pixel-perfect rendering.
-- UI selection for sampling modes is still future work.
+- UI selection for sampling modes is exposed through the `View` menu and canvas settings dialog.
 
 ### `debug/*`
 
@@ -345,7 +373,10 @@ Completed or substantially working:
 - Default bitmap rendering is pixel-perfect.
 - `File` menu now exposes new canvas, draft save/load, PNG export, and PNG share.
 - `Canvas` menu now exposes canvas settings and viewport reset.
-- `View` menu now exposes bitmap sampling modes and debug overlay toggling.
+- `View` menu now exposes bitmap sampling modes, wallpaper colors, and debug overlay toggling.
+- Primary drawing UI now uses floating HUD surfaces instead of fixed bars on all four sides.
+- Floating Brush, Layers, and Color inspector panels exist at MVP level.
+- MainActivity no longer owns HUD component implementation; floating HUD code lives in `ui/HudComponents.kt`.
 - Debug overlay and Logcat route provide useful input/performance diagnostics.
 - Basic undo, clear, layer add/select/visibility, save/load, export/share are present at MVP level.
 

@@ -8,6 +8,7 @@ pub struct RasterLayer {
 }
 
 impl RasterLayer {
+    /// Creates a visible raster layer with an empty tile grid sized to the document canvas.
     pub fn new(id: u64, name: impl Into<String>, canvas_size: CanvasSize) -> Self {
         Self {
             info: LayerInfo::new(id, name),
@@ -16,6 +17,7 @@ impl RasterLayer {
     }
 }
 
+/// Composites one canvas pixel by applying visible layers in order with source-over blending.
 pub fn composite_pixel(layers: &[RasterLayer], x: i32, y: i32) -> Rgba8 {
     layers
         .iter()
@@ -27,6 +29,7 @@ pub fn composite_pixel(layers: &[RasterLayer], x: i32, y: i32) -> Rgba8 {
         })
 }
 
+/// Flattens the layer stack into an RGBA byte buffer suitable for Android bitmap/export handoff.
 pub fn composite_rgba(layers: &[RasterLayer], canvas_size: CanvasSize) -> Vec<u8> {
     let mut rgba = Vec::with_capacity((canvas_size.width * canvas_size.height * 4) as usize);
 

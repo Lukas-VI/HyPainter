@@ -3,30 +3,20 @@ package io.github.lukasvi.hypainter
 import android.content.Intent
 import android.os.Bundle
 import android.view.View
+import android.view.MotionEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.core.content.FileProvider
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -36,6 +26,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
@@ -62,6 +53,14 @@ import io.github.lukasvi.hypainter.render.BitmapSampling
 import io.github.lukasvi.hypainter.input.CanvasInputRouter
 import io.github.lukasvi.hypainter.render.CanvasRenderOptions
 import io.github.lukasvi.hypainter.render.toFilterQuality
+import io.github.lukasvi.hypainter.ui.CanvasHudStatus
+import io.github.lukasvi.hypainter.ui.FloatingInspectorPanel
+import io.github.lukasvi.hypainter.ui.FloatingLeftToolHud
+import io.github.lukasvi.hypainter.ui.FloatingPanel
+import io.github.lukasvi.hypainter.ui.FloatingToolBar
+import io.github.lukasvi.hypainter.ui.HudMenuActions
+import io.github.lukasvi.hypainter.ui.HyPainterTheme
+import io.github.lukasvi.hypainter.ui.supportsWallpaperColors
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -76,17 +75,36 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/**
+ * 应用入口：封装主题并显示主应用界面 `HyPainterApp`。
+ */
+
 @Composable
 private fun HyPainterApp() {
-    MaterialTheme {
-        Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF15171A)) {
-            CanvasScreen()
+    val wallpaperColorsAvailable = supportsWallpaperColors()
+    var useWallpaperColors by rememberSaveable { mutableStateOf(wallpaperColorsAvailable) }
+
+    HyPainterTheme(useWallpaperColors = useWallpaperColors) {
+        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            CanvasScreen(
+                wallpaperColorsAvailable = wallpaperColorsAvailable,
+                useWallpaperColors = useWallpaperColors,
+                onUseWallpaperColorsChanged = { useWallpaperColors = it },
+            )
         }
     }
 }
 
+/**
+ * 应用根 Composable：负责主题开关（是否使用壁纸色彩）和承载 `CanvasScreen`。
+ */
+
 @Composable
-private fun CanvasScreen() {
+private fun CanvasScreen(
+    wallpaperColorsAvailable: Boolean,
+    useWallpaperColors: Boolean,
+    onUseWallpaperColorsChanged: (Boolean) -> Unit,
+) {
     val context = LocalContext.current
     val view = LocalView.current
     var engine by remember { mutableStateOf<PaintingEngine>(createPaintingEngine()) }
@@ -102,6 +120,8 @@ private fun CanvasScreen() {
     val debugState = remember { mutableStateOf(CanvasDebugState()) }
     var newCanvasDialogVisible by remember { mutableStateOf(false) }
     var canvasSettingsVisible by remember { mutableStateOf(false) }
+    var activePanel by remember { mutableStateOf<FloatingPanel?>(null) }
+    var brushOpacity by remember { mutableStateOf(1f) }
     val coroutineScope = rememberCoroutineScope()
     var inputRouter by remember { mutableStateOf(CanvasInputRouter()) }
     var renderOptions by remember { mutableStateOf(CanvasRenderOptions()) }
@@ -136,115 +156,231 @@ private fun CanvasScreen() {
         refreshModel()
         Unit
     }
+    val saveDraft = {
+        val output = File(context.filesDir, PROJECT_FILE_NAME)
+        runToolbarIo(
+            busy = toolbarBusy.value,
+            setBusy = { toolbarBusy.value = it },
+            launchBackground = { block -> coroutineScope.launch { block() } },
+            onStart = { projectStatus.value = "Saving" },
+            block = { engine.saveProject(output.absolutePath) },
+            onResult = { ok -> projectStatus.value = if (ok) "Saved" else "Save failed" },
+            onError = { projectStatus.value = "Save failed" },
+        )
+    }
+    val loadDraft = {
+        val input = File(context.filesDir, PROJECT_FILE_NAME)
+        runToolbarIo(
+            busy = toolbarBusy.value,
+            setBusy = { toolbarBusy.value = it },
+            launchBackground = { block -> coroutineScope.launch { block() } },
+            onStart = { projectStatus.value = "Loading" },
+            block = {
+                val project = ProjectCodec.load(input.absolutePath)
+                if (project == null) {
+                    null
+                } else {
+                    createPaintingEngine(project.canvasWidth, project.canvasHeight).takeIf {
+                        it.loadProject(input.absolutePath)
+                    }
+                }
+            },
+            onResult = { loadedEngine ->
+                if (loadedEngine != null) {
+                    engine = loadedEngine
+                    documentTitle = PROJECT_FILE_NAME
+                    latestPressure.value = 0f
+                    resetInputAndViewport()
+                    refreshModel()
+                    projectStatus.value = "Loaded"
+                } else {
+                    projectStatus.value = "Load failed"
+                }
+            },
+            onError = { projectStatus.value = "Load failed" },
+        )
+    }
+    val exportPng = {
+        val output = File(context.filesDir, EXPORT_FILE_NAME)
+        runToolbarIo(
+            busy = toolbarBusy.value,
+            setBusy = { toolbarBusy.value = it },
+            launchBackground = { block -> coroutineScope.launch { block() } },
+            onStart = { exportStatus.value = "Exporting" },
+            block = { engine.exportPng(output.absolutePath) },
+            onResult = { ok -> exportStatus.value = if (ok) "Exported" else "Export failed" },
+            onError = { exportStatus.value = "Export failed" },
+        )
+    }
+    val menuActions = HudMenuActions(
+        renderOptions = renderOptions,
+        debugEnabled = BuildConfig.DEBUG,
+        debugOverlayVisible = debugOverlayVisible.value,
+        wallpaperColorsAvailable = wallpaperColorsAvailable,
+        useWallpaperColors = useWallpaperColors,
+        onNewCanvas = { newCanvasDialogVisible = true },
+        onSaveDraft = saveDraft,
+        onLoadDraft = loadDraft,
+        onExportPng = exportPng,
+        onSharePng = {
+            shareExportedPng(
+                context = context,
+                engine = engine,
+                toolbarBusy = toolbarBusy.value,
+                launchBackground = { block -> coroutineScope.launch { block() } },
+                onToolbarBusyChanged = { toolbarBusy.value = it },
+                onExportStatusChanged = { exportStatus.value = it },
+            )
+        },
+        onCanvasSettings = { canvasSettingsVisible = true },
+        onResetView = { resetInputAndViewport() },
+        onRenderOptionsChanged = {
+            renderOptions = it
+            refreshCanvas()
+        },
+        onDebugOverlayChanged = { debugOverlayVisible.value = it },
+        onUseWallpaperColorsChanged = onUseWallpaperColorsChanged,
+    )
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF15171A)),
+            .background(MaterialTheme.colorScheme.background),
     ) {
-        AppCommandBar(
-            modifier = Modifier.fillMaxWidth(),
-            context = context,
-            engine = engine,
-            snapshot = toolbarSnapshot,
-            documentTitle = documentTitle,
-            latestPressure = latestPressure.value,
-            exportStatus = exportStatus.value,
-            projectStatus = projectStatus.value,
-            toolbarBusy = toolbarBusy.value,
-            renderOptions = renderOptions,
-            onRenderOptionsChanged = {
-                renderOptions = it
-                refreshCanvas()
-            },
-            onNewCanvas = { newCanvasDialogVisible = true },
-            onCanvasSettings = { canvasSettingsVisible = true },
-            onResetView = { resetInputAndViewport() },
-            onExportStatusChanged = { exportStatus.value = it },
-            onProjectStatusChanged = { projectStatus.value = it },
-            onToolbarBusyChanged = { toolbarBusy.value = it },
-            onModelChanged = refreshModel,
-            onDocumentLoaded = { loadedEngine, loadedTitle ->
-                engine = loadedEngine
-                documentTitle = loadedTitle
-                latestPressure.value = 0f
-                resetInputAndViewport()
-                refreshModel()
-            },
-            launchBackground = { block -> coroutineScope.launch { block() } },
-            debugEnabled = BuildConfig.DEBUG,
-            debugOverlayVisible = debugOverlayVisible.value,
-            onDebugOverlayChanged = { debugOverlayVisible.value = it },
-        )
-
-        Box(
+        Canvas(
             modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth(),
+                .fillMaxSize()
+                .pointerInteropFilter { event ->
+                    if (toolbarBusy.value) {
+                        return@pointerInteropFilter true
+                    }
+                    // 当存在活动面板时，单击画布空白处关闭面板（简单点击判断）。
+                    if (activePanel != null && event.action == MotionEvent.ACTION_UP) {
+                        activePanel = null
+                        return@pointerInteropFilter true
+                    }
+                    inputRouter.onMotionEvent(
+                        event = event,
+                        viewport = viewport.value,
+                        engine = engine,
+                        onViewportChanged = { viewport.value = it },
+                        onEngineChanged = refreshCanvas,
+                        onEngineChangedNextFrame = { frameInvalidator.request() },
+                        onPressure = { latestPressure.value = it },
+                        debugEnabled = debugOverlayVisible.value,
+                        onDebugChanged = { debugState.value = it },
+                    )
+                },
         ) {
-            Canvas(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .pointerInteropFilter { event ->
-                        if (toolbarBusy.value) {
-                            return@pointerInteropFilter true
-                        }
-                        inputRouter.onMotionEvent(
-                            event = event,
-                            viewport = viewport.value,
-                            engine = engine,
-                            onViewportChanged = { viewport.value = it },
-                            onEngineChanged = refreshCanvas,
-                            onEngineChangedNextFrame = { frameInvalidator.request() },
-                            onPressure = { latestPressure.value = it },
-                            debugEnabled = debugOverlayVisible.value,
-                            onDebugChanged = { debugState.value = it },
-                        )
-                    },
-            ) {
-                val state = viewport.value
-                withTransformCompat(state) {
-                    drawCanvasBackground(snapshot.canvasWidth, snapshot.canvasHeight)
-                    snapshot.renderedImage?.let { image ->
-                        drawImage(
-                            image = image,
-                            filterQuality = renderOptions.bitmapSampling.toFilterQuality(),
-                        )
-                    }
-                    if (snapshot.renderedImage == null) {
-                        for (index in snapshot.committedStrokes.indices) {
-                            val stroke = snapshot.committedStrokes[index]
-                            if (snapshot.layerIsVisible(stroke.layerId)) {
-                                drawStroke(stroke)
-                            }
+            val state = viewport.value
+            withTransformCompat(state) {
+                drawCanvasBackground(snapshot.canvasWidth, snapshot.canvasHeight)
+                snapshot.renderedImage?.let { image ->
+                    drawImage(
+                        image = image,
+                        filterQuality = renderOptions.bitmapSampling.toFilterQuality(),
+                    )
+                }
+                if (snapshot.renderedImage == null) {
+                    for (index in snapshot.committedStrokes.indices) {
+                        val stroke = snapshot.committedStrokes[index]
+                        if (snapshot.layerIsVisible(stroke.layerId)) {
+                            drawStroke(stroke)
                         }
                     }
-                    snapshot.activeImage?.let { image ->
-                        drawImage(
-                            image = image,
-                            filterQuality = renderOptions.bitmapSampling.toFilterQuality(),
-                        )
-                    }
-                    if (snapshot.activeImage == null) {
-                        snapshot.activeStroke?.let { stroke ->
-                            if (snapshot.layerIsVisible(stroke.layerId)) {
-                                drawStroke(stroke)
-                            }
+                }
+                snapshot.activeImage?.let { image ->
+                    drawImage(
+                        image = image,
+                        filterQuality = renderOptions.bitmapSampling.toFilterQuality(),
+                    )
+                }
+                if (snapshot.activeImage == null) {
+                    snapshot.activeStroke?.let { stroke ->
+                        if (snapshot.layerIsVisible(stroke.layerId)) {
+                            drawStroke(stroke)
                         }
                     }
                 }
             }
+        }
 
-            if (BuildConfig.DEBUG && debugOverlayVisible.value) {
-                CanvasDebugOverlay(
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(16.dp),
-                    state = debugState.value,
-                    viewport = viewport.value,
-                    snapshot = snapshot,
-                )
+        FloatingLeftToolHud(
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .padding(start = 18.dp),
+            snapshot = toolbarSnapshot,
+            toolbarBusy = toolbarBusy.value,
+            brushOpacity = brushOpacity,
+            onBrushLibrary = { activePanel = FloatingPanel.Brush },
+            onOpacityChanged = {
+                brushOpacity = it
+                projectStatus.value = "Opacity placeholder ${((it * 100).toInt())}%"
+            },
+            onBrushChanged = {
+                engine.setBrush(it)
+                refreshModel()
+            },
+        )
+
+        FloatingToolBar(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(top = 18.dp, end =18.dp),
+            activePanel = activePanel,
+            onMenuPanel = { activePanel = if (activePanel == FloatingPanel.Menu) null else FloatingPanel.Menu },
+            onSelectionTool = { projectStatus.value = "Selection placeholder" },
+            onTransformTool = { projectStatus.value = "Transform placeholder" },
+            onToolPanel = { activePanel = if (activePanel == FloatingPanel.Brush) null else FloatingPanel.Brush },
+            onColorPanel = { activePanel = if (activePanel == FloatingPanel.Color) null else FloatingPanel.Color },
+            onLayersPanel = { activePanel = if (activePanel == FloatingPanel.Layers) null else FloatingPanel.Layers },
+        )
+
+        activePanel?.let { panel ->
+            val inspectorModifier = if (panel == FloatingPanel.Menu) {
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 92.dp, end = 18.dp)
+            } else {
+                Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 22.dp)
             }
+
+            FloatingInspectorPanel(
+                modifier = inspectorModifier,
+                panel = panel,
+                engine = engine,
+                snapshot = toolbarSnapshot,
+                toolbarBusy = toolbarBusy.value,
+                menuActions = menuActions,
+                onClose = { activePanel = null },
+                onModelChanged = refreshModel,
+            )
+        }
+
+        CanvasHudStatus(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 18.dp),
+            documentTitle = documentTitle,
+            snapshot = toolbarSnapshot,
+            latestPressure = latestPressure.value,
+            exportStatus = exportStatus.value,
+            projectStatus = projectStatus.value,
+            nativeBacked = engine.nativeBacked,
+            renderOptions = renderOptions,
+        )
+
+        if (BuildConfig.DEBUG && debugOverlayVisible.value) {
+            CanvasDebugOverlay(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 96.dp, bottom = 18.dp),
+                state = debugState.value,
+                viewport = viewport.value,
+                snapshot = snapshot,
+            )
         }
 
         if (newCanvasDialogVisible) {
@@ -275,263 +411,15 @@ private fun CanvasScreen() {
     }
 }
 
-@Composable
-private fun AppCommandBar(
-    modifier: Modifier,
-    context: android.content.Context,
-    engine: PaintingEngine,
-    snapshot: io.github.lukasvi.hypainter.engine.EngineSnapshot,
-    documentTitle: String,
-    latestPressure: Float,
-    exportStatus: String?,
-    projectStatus: String?,
-    toolbarBusy: Boolean,
-    renderOptions: CanvasRenderOptions,
-    onRenderOptionsChanged: (CanvasRenderOptions) -> Unit,
-    onNewCanvas: () -> Unit,
-    onCanvasSettings: () -> Unit,
-    onResetView: () -> Unit,
-    onExportStatusChanged: (String) -> Unit,
-    onProjectStatusChanged: (String) -> Unit,
-    onToolbarBusyChanged: (Boolean) -> Unit,
-    onModelChanged: () -> Unit,
-    onDocumentLoaded: (PaintingEngine, String) -> Unit,
-    launchBackground: (suspend () -> Unit) -> Unit,
-    debugEnabled: Boolean,
-    debugOverlayVisible: Boolean,
-    onDebugOverlayChanged: (Boolean) -> Unit,
-) {
-    Surface(modifier = modifier, color = Color(0xFF202329), tonalElevation = 4.dp) {
-        Row(
-            modifier = Modifier
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            FileMenuButton(
-                context = context,
-                engine = engine,
-                toolbarBusy = toolbarBusy,
-                onNewCanvas = onNewCanvas,
-                onExportStatusChanged = onExportStatusChanged,
-                onProjectStatusChanged = onProjectStatusChanged,
-                onToolbarBusyChanged = onToolbarBusyChanged,
-                onModelChanged = onModelChanged,
-                onDocumentLoaded = onDocumentLoaded,
-                launchBackground = launchBackground,
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            CanvasMenuButton(
-                onCanvasSettings = onCanvasSettings,
-                onResetView = onResetView,
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            ViewMenuButton(
-                renderOptions = renderOptions,
-                onRenderOptionsChanged = onRenderOptionsChanged,
-                debugEnabled = debugEnabled,
-                debugOverlayVisible = debugOverlayVisible,
-                onDebugOverlayChanged = onDebugOverlayChanged,
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            AssistChip(
-                onClick = {},
-                label = {
-                    Text(
-                        "$documentTitle · ${snapshot.canvasWidth}x${snapshot.canvasHeight} · ${
-                            if (engine.nativeBacked) "Native" else "Kotlin"
-                        }",
-                    )
-                },
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            CanvasToolbar(
-                modifier = Modifier,
-                engine = engine,
-                snapshot = snapshot,
-                latestPressure = latestPressure,
-                toolbarBusy = toolbarBusy,
-                onModelChanged = onModelChanged,
-            )
-        }
-    }
-}
-
-@Composable
-private fun FileMenuButton(
-    context: android.content.Context,
-    engine: PaintingEngine,
-    toolbarBusy: Boolean,
-    onNewCanvas: () -> Unit,
-    onExportStatusChanged: (String) -> Unit,
-    onProjectStatusChanged: (String) -> Unit,
-    onToolbarBusyChanged: (Boolean) -> Unit,
-    onModelChanged: () -> Unit,
-    onDocumentLoaded: (PaintingEngine, String) -> Unit,
-    launchBackground: (suspend () -> Unit) -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        Button(onClick = { expanded = true }, enabled = !toolbarBusy) {
-            Text("File")
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(
-                text = { Text("New Canvas") },
-                onClick = {
-                    expanded = false
-                    onNewCanvas()
-                },
-            )
-            HorizontalDivider()
-            DropdownMenuItem(
-                text = { Text("Save Draft") },
-                onClick = {
-                    expanded = false
-                    val output = File(context.filesDir, PROJECT_FILE_NAME)
-                    runToolbarIo(
-                        busy = toolbarBusy,
-                        setBusy = onToolbarBusyChanged,
-                        launchBackground = launchBackground,
-                        onStart = { onProjectStatusChanged("Saving") },
-                        block = { engine.saveProject(output.absolutePath) },
-                        onResult = { ok -> onProjectStatusChanged(if (ok) "Saved" else "Save failed") },
-                        onError = { onProjectStatusChanged("Save failed") },
-                    )
-                },
-            )
-            DropdownMenuItem(
-                text = { Text("Load Draft") },
-                onClick = {
-                    expanded = false
-                    val input = File(context.filesDir, PROJECT_FILE_NAME)
-                    runToolbarIo(
-                        busy = toolbarBusy,
-                        setBusy = onToolbarBusyChanged,
-                        launchBackground = launchBackground,
-                        onStart = { onProjectStatusChanged("Loading") },
-                        block = {
-                            val project = ProjectCodec.load(input.absolutePath)
-                            if (project == null) {
-                                null
-                            } else {
-                                createPaintingEngine(project.canvasWidth, project.canvasHeight).takeIf {
-                                    it.loadProject(input.absolutePath)
-                                }
-                            }
-                        },
-                        onResult = { loadedEngine ->
-                            if (loadedEngine != null) {
-                                onDocumentLoaded(loadedEngine, PROJECT_FILE_NAME)
-                                onProjectStatusChanged("Loaded")
-                            } else {
-                                onProjectStatusChanged("Load failed")
-                            }
-                        },
-                        onError = { onProjectStatusChanged("Load failed") },
-                    )
-                },
-            )
-            HorizontalDivider()
-            DropdownMenuItem(
-                text = { Text("Export PNG") },
-                onClick = {
-                    expanded = false
-                    val output = File(context.filesDir, EXPORT_FILE_NAME)
-                    runToolbarIo(
-                        busy = toolbarBusy,
-                        setBusy = onToolbarBusyChanged,
-                        launchBackground = launchBackground,
-                        onStart = { onExportStatusChanged("Exporting") },
-                        block = { engine.exportPng(output.absolutePath) },
-                        onResult = { ok -> onExportStatusChanged(if (ok) "Exported" else "Export failed") },
-                        onError = { onExportStatusChanged("Export failed") },
-                    )
-                },
-            )
-            DropdownMenuItem(
-                text = { Text("Share PNG") },
-                onClick = {
-                    expanded = false
-                    shareExportedPng(
-                        context = context,
-                        engine = engine,
-                        toolbarBusy = toolbarBusy,
-                        launchBackground = launchBackground,
-                        onToolbarBusyChanged = onToolbarBusyChanged,
-                        onExportStatusChanged = onExportStatusChanged,
-                    )
-                },
-            )
-        }
-    }
-}
-
-@Composable
-private fun CanvasMenuButton(
-    onCanvasSettings: () -> Unit,
-    onResetView: () -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        Button(onClick = { expanded = true }) {
-            Text("Canvas")
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(
-                text = { Text("Canvas Settings") },
-                onClick = {
-                    expanded = false
-                    onCanvasSettings()
-                },
-            )
-            DropdownMenuItem(
-                text = { Text("Reset View") },
-                onClick = {
-                    expanded = false
-                    onResetView()
-                },
-            )
-        }
-    }
-}
-
-@Composable
-private fun ViewMenuButton(
-    renderOptions: CanvasRenderOptions,
-    onRenderOptionsChanged: (CanvasRenderOptions) -> Unit,
-    debugEnabled: Boolean,
-    debugOverlayVisible: Boolean,
-    onDebugOverlayChanged: (Boolean) -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        Button(onClick = { expanded = true }) {
-            Text("View")
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            BitmapSampling.entries.forEach { sampling ->
-                DropdownMenuItem(
-                    text = { Text(sampling.label()) },
-                    onClick = {
-                        expanded = false
-                        onRenderOptionsChanged(renderOptions.copy(bitmapSampling = sampling))
-                    },
-                )
-            }
-            if (debugEnabled) {
-                HorizontalDivider()
-                DropdownMenuItem(
-                    text = { Text(if (debugOverlayVisible) "Hide Debug Overlay" else "Show Debug Overlay") },
-                    onClick = {
-                        expanded = false
-                        onDebugOverlayChanged(!debugOverlayVisible)
-                    },
-                )
-            }
-        }
-    }
-}
+/**
+ * 画布屏幕：包含画布渲染、输入路由、工具栏、面板、导出/保存等应用级状态。
+ *
+ * 该函数集中管理：
+ * - 引擎实例与快照 (`engine`, `snapshot`, `toolbarSnapshot`)；
+ * - 视口与输入路由 (`viewport`, `inputRouter`)；
+ * - UI 面板状态和工具栏忙碌状态 (`activePanel`, `toolbarBusy`)；
+ * - 导出/保存/加载等异步操作（使用 `runToolbarIo` 封装）。
+ */
 
 @Composable
 private fun NewCanvasDialog(
@@ -608,6 +496,11 @@ private fun NewCanvasDialog(
     )
 }
 
+/**
+ * 新建画布对话框：允许输入名称和像素尺寸，提供若干预设按钮。
+ * 验证宽高在允许范围内后回调 `onCreate` 创建新文档。
+ */
+
 @Composable
 private fun PresetButton(
     label: String,
@@ -619,6 +512,8 @@ private fun PresetButton(
         Text(label)
     }
 }
+
+/** 预设尺寸按钮，点击后将宽高通过 `onSelect` 回传。 */
 
 @Composable
 private fun CanvasSettingsDialog(
@@ -659,117 +554,9 @@ private fun CanvasSettingsDialog(
     )
 }
 
-@Composable
-private fun BrushChip(label: String, enabled: Boolean = true, onClick: () -> Unit) {
-    AssistChip(onClick = onClick, enabled = enabled, label = { Text(label) })
-}
-
-@Composable
-private fun CanvasToolbar(
-    modifier: Modifier,
-    engine: PaintingEngine,
-    snapshot: io.github.lukasvi.hypainter.engine.EngineSnapshot,
-    latestPressure: Float,
-    toolbarBusy: Boolean,
-    onModelChanged: () -> Unit,
-) {
-    Row(modifier = modifier) {
-        AssistChip(
-            onClick = {
-                engine.clear()
-                onModelChanged()
-            },
-            enabled = !toolbarBusy,
-            label = { Text("Clear") },
-        )
-        Box(modifier = Modifier.size(8.dp))
-        AssistChip(
-            onClick = {
-                engine.undo()
-                onModelChanged()
-            },
-            enabled = !toolbarBusy,
-            label = { Text("Undo") },
-        )
-        Box(modifier = Modifier.size(8.dp))
-        AssistChip(
-            onClick = {},
-            label = {
-                Text(
-                    "${if (engine.nativeBacked) "Native" else "Kotlin"} · Pressure ${
-                        "%.2f".format(latestPressure)
-                    }",
-                )
-            },
-        )
-        Box(modifier = Modifier.size(8.dp))
-        BrushChip("Black", enabled = !toolbarBusy) {
-            engine.setBrush(snapshot.brush.copy(colorArgb = 0xff000000.toInt()))
-            onModelChanged()
-        }
-        Box(modifier = Modifier.size(8.dp))
-        BrushChip("Red", enabled = !toolbarBusy) {
-            engine.setBrush(snapshot.brush.copy(colorArgb = 0xffd72638.toInt()))
-            onModelChanged()
-        }
-        Box(modifier = Modifier.size(8.dp))
-        BrushChip("Blue", enabled = !toolbarBusy) {
-            engine.setBrush(snapshot.brush.copy(colorArgb = 0xff2563eb.toInt()))
-            onModelChanged()
-        }
-        Box(modifier = Modifier.size(8.dp))
-        AssistChip(
-            onClick = {
-                engine.setBrush(snapshot.brush.copy(radiusPx = (snapshot.brush.radiusPx - 2f).coerceAtLeast(2f)))
-                onModelChanged()
-            },
-            enabled = !toolbarBusy,
-            label = { Text("-") },
-        )
-        Box(modifier = Modifier.size(8.dp))
-        AssistChip(
-            onClick = {
-                engine.setBrush(snapshot.brush.copy(radiusPx = (snapshot.brush.radiusPx + 2f).coerceAtMost(48f)))
-                onModelChanged()
-            },
-            enabled = !toolbarBusy,
-            label = { Text("Size ${snapshot.brush.radiusPx.toInt()}") },
-        )
-        Box(modifier = Modifier.size(8.dp))
-        AssistChip(
-            onClick = {
-                engine.addLayer()
-                onModelChanged()
-            },
-            enabled = !toolbarBusy,
-            label = { Text("+ Layer") },
-        )
-        snapshot.layers.forEach { layer ->
-            Box(modifier = Modifier.size(8.dp))
-            AssistChip(
-                onClick = {
-                    engine.selectLayer(layer.id)
-                    onModelChanged()
-                },
-                enabled = !toolbarBusy,
-                label = {
-                    Text(
-                        "${if (layer.id == snapshot.activeLayerId) "*" else ""}${layer.name}",
-                    )
-                },
-            )
-            Box(modifier = Modifier.size(8.dp))
-            AssistChip(
-                onClick = {
-                    engine.toggleLayerVisibility(layer.id)
-                    onModelChanged()
-                },
-                enabled = !toolbarBusy,
-                label = { Text(if (layer.visible) "Hide" else "Show") },
-            )
-        }
-    }
-}
+/**
+ * 画布设置对话框：显示当前画布尺寸并允许选择位图采样（BitmapSampling）。
+ */
 
 private fun shareExportedPng(
     context: android.content.Context,
@@ -808,6 +595,11 @@ private fun shareExportedPng(
     )
 }
 
+/**
+ * 导出并分享 PNG：先通过 `runToolbarIo` 导出文件，成功后使用 `FileProvider` 分享。
+ * UI 状态通过 `onToolbarBusyChanged` 与 `onExportStatusChanged` 回传。
+ */
+
 private fun BitmapSampling.label(): String {
     return when (this) {
         BitmapSampling.PixelPerfect -> "Pixel Perfect"
@@ -817,6 +609,8 @@ private fun BitmapSampling.label(): String {
         BitmapSampling.Bicubic -> "Bicubic"
     }
 }
+
+/** 将 `BitmapSampling` 转换为用于设置对话框的可读标签。 */
 
 private fun <T> runToolbarIo(
     busy: Boolean,
@@ -846,6 +640,12 @@ private fun <T> runToolbarIo(
     }
 }
 
+/**
+ * 通用的工具栏异步 IO 封装：
+ * - 防止并发执行（`busy` 标志）
+ * - 在后台线程运行 `block` 并在完成后在回调中返回结果或错误
+ */
+
 private class FrameInvalidator(
     private val view: View,
     private val onFrame: () -> Unit,
@@ -864,6 +664,11 @@ private class FrameInvalidator(
     }
 }
 
+/**
+ * 帧无效器：在需要在下一帧重新绘制时（例如引擎变更）调用 `request()`。
+ * 它使用 `View.postOnAnimation` 来安排下一次动画帧回调。
+ */
+
 private fun DrawScope.withTransformCompat(
     viewport: ViewportState,
     block: DrawScope.() -> Unit,
@@ -878,12 +683,21 @@ private fun DrawScope.withTransformCompat(
     }
 }
 
+/**
+ * 兼容性变换包装：根据 `ViewportState` 应用平移、旋转与缩放，
+ * 保证在绘制画布元素前正确变换坐标系。
+ */
+
 private fun DrawScope.drawCanvasBackground(width: Int, height: Int) {
     drawRect(
         color = Color.White,
         size = androidx.compose.ui.geometry.Size(width.toFloat(), height.toFloat()),
     )
 }
+
+/**
+ * 绘制画布背景（白色）。用于清空并作为画布底色。
+ */
 
 private fun DrawScope.drawStroke(stroke: EngineStroke) {
     for (index in 1 until stroke.points.size) {
@@ -908,6 +722,10 @@ private fun DrawScope.drawStroke(stroke: EngineStroke) {
     }
 }
 
+/**
+ * 绘制单条笔触：遍历点序列并以压力值调节色彩透明度与线宽。
+ */
+
 private fun io.github.lukasvi.hypainter.engine.EngineSnapshot.layerIsVisible(layerId: Long): Boolean {
     for (index in layers.indices) {
         val layer = layers[index]
@@ -918,7 +736,13 @@ private fun io.github.lukasvi.hypainter.engine.EngineSnapshot.layerIsVisible(lay
     return false
 }
 
+/**
+ * 检查指定图层 ID 是否在快照中可见。
+ */
+
 private const val PROJECT_FILE_NAME = "hypainter-project.hyp"
 private const val EXPORT_FILE_NAME = "hypainter-export.png"
 private const val CANVAS_MIN_SIZE = 64
 private const val CANVAS_MAX_SIZE = 8192
+
+/** 常量：项目文件名、导出文件名以及允许的画布尺寸范围。 */

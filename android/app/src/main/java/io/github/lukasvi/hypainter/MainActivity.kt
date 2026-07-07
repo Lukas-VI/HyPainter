@@ -189,18 +189,40 @@ private fun CanvasScreen(
     val gestureToastScale = remember { mutableStateOf("100%") }
     val gestureToastRotation = remember { mutableStateOf("0°") }
     val gestureHideJob = remember { mutableStateOf<Job?>(null) }
+    val menuToastVisible = remember { mutableStateOf(false) }
+    val menuToastMessage = remember { mutableStateOf("") }
+    val menuToastJob = remember { mutableStateOf<Job?>(null) }
+    val showMenuToast: (String) -> Unit = { message ->
+        menuToastJob.value?.cancel()
+        menuToastMessage.value = message
+        menuToastVisible.value = true
+        menuToastJob.value = coroutineScope.launch {
+            delay(1500)
+            menuToastVisible.value = false
+        }
+    }
     val snapshot = remember(canvasVersion.value, engine) { engine.canvasSnapshot() }
     val toolbarSnapshot = remember(modelVersion.value, engine) { engine.snapshot() }
 
-    if (containerSize.value.width > 0 && !hasCentered.value) {
-        LaunchedEffect(Unit) {
-            val size = containerSize.value
+    val centerCanvas = {
+        val size = containerSize.value
+        if (size.width > 0 && size.height > 0) {
+            val s = engine.canvasSnapshot()
+            val scaleX = size.width.toFloat() / s.canvasWidth
+            val scaleY = size.height.toFloat() / s.canvasHeight
+            val scale = minOf(scaleX, scaleY).coerceIn(0.25f, 8f)
             viewport.value = ViewportState(
                 pan = Offset(
-                    (size.width - snapshot.canvasWidth) / 2f,
-                    (size.height - snapshot.canvasHeight) / 2f
-                )
+                    (size.width - s.canvasWidth * scale) / 2f,
+                    (size.height - s.canvasHeight * scale) / 2f
+                ),
+                scale = scale,
             )
+        }
+    }
+    if (containerSize.value.width > 0 && !hasCentered.value) {
+        LaunchedEffect(Unit) {
+            centerCanvas()
             hasCentered.value = true
         }
     }
@@ -216,6 +238,7 @@ private fun CanvasScreen(
     val resetInputAndViewport = {
         inputRouter = CanvasInputRouter()
         viewport.value = ViewportState()
+        centerCanvas()
         Unit
     }
     val replaceDocument = { width: Int, height: Int, title: String ->
@@ -234,10 +257,20 @@ private fun CanvasScreen(
             busy = toolbarBusy.value,
             setBusy = { toolbarBusy.value = it },
             launchBackground = { block -> coroutineScope.launch { block() } },
-            onStart = { projectStatus.value = "Saving" },
+            onStart = {
+                projectStatus.value = "Saving"
+                showMenuToast("Saving")
+            },
             block = { engine.saveProject(output.absolutePath) },
-            onResult = { ok -> projectStatus.value = if (ok) "Saved" else "Save failed" },
-            onError = { projectStatus.value = "Save failed" },
+            onResult = { ok ->
+                val message = if (ok) "Saved" else "Save failed"
+                projectStatus.value = message
+                showMenuToast(message)
+            },
+            onError = {
+                projectStatus.value = "Save failed"
+                showMenuToast("Save failed")
+            },
         )
     }
     val loadDraft = {
@@ -246,7 +279,10 @@ private fun CanvasScreen(
             busy = toolbarBusy.value,
             setBusy = { toolbarBusy.value = it },
             launchBackground = { block -> coroutineScope.launch { block() } },
-            onStart = { projectStatus.value = "Loading" },
+            onStart = {
+                projectStatus.value = "Loading"
+                showMenuToast("Loading")
+            },
             block = {
                 val project = ProjectCodec.load(input.absolutePath)
                 if (project == null) {
@@ -265,11 +301,16 @@ private fun CanvasScreen(
                     resetInputAndViewport()
                     refreshModel()
                     projectStatus.value = "Loaded"
+                    showMenuToast("Loaded")
                 } else {
                     projectStatus.value = "Load failed"
+                    showMenuToast("Load failed")
                 }
             },
-            onError = { projectStatus.value = "Load failed" },
+            onError = {
+                projectStatus.value = "Load failed"
+                showMenuToast("Load failed")
+            },
         )
     }
     val exportPng = {
@@ -278,10 +319,20 @@ private fun CanvasScreen(
             busy = toolbarBusy.value,
             setBusy = { toolbarBusy.value = it },
             launchBackground = { block -> coroutineScope.launch { block() } },
-            onStart = { exportStatus.value = "Exporting" },
+            onStart = {
+                exportStatus.value = "Exporting"
+                showMenuToast("Exporting")
+            },
             block = { engine.exportPng(output.absolutePath) },
-            onResult = { ok -> exportStatus.value = if (ok) "Exported" else "Export failed" },
-            onError = { exportStatus.value = "Export failed" },
+            onResult = { ok ->
+                val message = if (ok) "Exported" else "Export failed"
+                exportStatus.value = message
+                showMenuToast(message)
+            },
+            onError = {
+                exportStatus.value = "Export failed"
+                showMenuToast("Export failed")
+            },
         )
     }
     val menuActions = HudMenuActions(
@@ -301,7 +352,10 @@ private fun CanvasScreen(
                 toolbarBusy = toolbarBusy.value,
                 launchBackground = { block -> coroutineScope.launch { block() } },
                 onToolbarBusyChanged = { toolbarBusy.value = it },
-                onExportStatusChanged = { exportStatus.value = it },
+                onExportStatusChanged = {
+                    exportStatus.value = it
+                    showMenuToast(it)
+                },
             )
         },
         onCanvasSettings = { canvasSettingsVisible = true },
@@ -486,26 +540,22 @@ private fun CanvasScreen(
         }
 
         // Gesture toast scale + rotation badge, visible during pinch-zoom/rotate
-        AnimatedVisibility(
+        StatusToast(
             visible = gestureToastVisible.value,
-            enter = slideInVertically { it } + fadeIn(),
-            exit = slideOutVertically { it } + fadeOut(),
+            message = "${gestureToastScale.value}  ${gestureToastRotation.value}",
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 92.dp),
-        ) {
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.78f),
-            ) {
-                Text(
-                    text = "${gestureToastScale.value}  ${gestureToastRotation.value}",
-                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-        }
+        )
+
+        // Menu action feedback toast, visible when save/load/export/share commands finish.
+        StatusToast(
+            visible = menuToastVisible.value,
+            message = menuToastMessage.value,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 18.dp),
+        )
 
         if (newCanvasDialogVisible) {
             NewCanvasDialog(
@@ -530,6 +580,35 @@ private fun CanvasScreen(
                     canvasSettingsVisible = false
                 },
                 onDismiss = { canvasSettingsVisible = false },
+            )
+        }
+    }
+}
+
+/**
+ * 通用状态吐司：用于显示手势和菜单操作反馈，保持一致的外观与动画。
+ */
+@Composable
+private fun StatusToast(
+    visible: Boolean,
+    message: String,
+    modifier: Modifier = Modifier,
+) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = slideInVertically { it } + fadeIn(),
+        exit = slideOutVertically { it } + fadeOut(),
+        modifier = modifier,
+    ) {
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.78f),
+        ) {
+            Text(
+                text = message,
+                modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurface,
             )
         }
     }
@@ -866,6 +945,6 @@ private fun io.github.lukasvi.hypainter.engine.EngineSnapshot.layerIsVisible(lay
 
 private const val PROJECT_FILE_NAME = "hypainter-project.hyp"
 private const val EXPORT_FILE_NAME = "hypainter-export.png"
-private const val CANVAS_MIN_SIZE = 64
+private const val CANVAS_MIN_SIZE = 8
 private const val CANVAS_MAX_SIZE = 8192
 

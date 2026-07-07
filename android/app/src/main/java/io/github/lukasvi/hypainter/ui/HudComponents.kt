@@ -20,6 +20,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -40,6 +41,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -108,12 +110,20 @@ internal fun FloatingLeftToolHud(
     onBrushChanged: (EngineBrush) -> Unit,
 ) {
     Surface(
-        modifier = modifier,
+        modifier = modifier
+        .background(
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.84f),
+            shape = RoundedCornerShape(32.dp)
+        )
+        ,
         shape = RoundedCornerShape(32.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.84f),
-        tonalElevation = 6.dp,
-        shadowElevation = 8.dp,
-    ) {
+        color = Color.Transparent,
+        border = BorderStroke(
+            width = 2.dp,
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.15f)
+        )
+    )
+    {
         Column(
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -176,7 +186,7 @@ internal fun FloatingToolBar(
         ) {
             ToolbarIcon(LucideIcons.Menu, "Menus", tooltipText = "Menus", active = activePanel == FloatingPanel.Menu, onClick = onMenuPanel)
             ToolbarIcon(LucideIcons.SquareDashedMousePointer, "Selection placeholder", tooltipText = "Selection", active = false, onClick = onSelectionTool)
-            ToolbarIcon(LucideIcons.VectorSquare, "Transform placeholder", tooltipText = "Transform", active = false, onClick = onTransformTool)
+            ToolbarIcon(LucideIcons.Expand, "Transform placeholder", tooltipText = "Transform", active = false, onClick = onTransformTool)
             ToolbarIcon(LucideIcons.PencilRuler, "Tool placeholder", tooltipText = "Brush", active = activePanel == FloatingPanel.Brush, onClick = onToolPanel)
             ToolbarIcon(LucideIcons.Palette, "Color", tooltipText = "Color", active = activePanel == FloatingPanel.Color, onClick = onColorPanel)
             ToolbarIcon(LucideIcons.Layers2, "Layers", tooltipText = "Layers", active = activePanel == FloatingPanel.Layers, onClick = onLayersPanel)

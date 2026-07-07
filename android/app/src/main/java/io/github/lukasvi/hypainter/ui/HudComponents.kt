@@ -362,7 +362,7 @@ private fun VerticalHudSlider(
             Slider(
                 modifier = Modifier
                     .requiredWidth(132.dp)
-                    .requiredHeight(36.dp)
+                    .requiredHeight(42.dp)
                     .graphicsLayer(rotationZ = -90f),
                 value = value,
                 onValueChange = onValueChange,

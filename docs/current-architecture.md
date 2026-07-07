@@ -108,6 +108,10 @@ Current role:
 
 - Defines the floating tablet drawing HUD outside `MainActivity`.
 - Left HUD follows the sketch order: brush library, three quick brush buttons, opacity slider, and size slider.
+- Panels use AnimatedVisibility and AnimatedContent for fade in/out transitions.
+- Canvas auto-centering and auto-fit applied on startup, new canvas, and Reset View.
+- Immersive mode hides navigation bar via onWindowFocusChanged.
+- Gesture toast shows zoom percentage and rotation angle during two-finger pinch.
 - Right-top toolbar follows the sketch order: menu, selection, transform, tool, color, and layers.
 - `LucideIcons.kt` provides a small local Lucide-style icon subset so HUD iteration is not blocked by external design-kit or icon-library availability.
 
@@ -378,6 +382,12 @@ Completed or substantially working:
 - Floating Brush, Layers, and Color inspector panels exist at MVP level.
 - MainActivity no longer owns HUD component implementation; floating HUD code lives in `ui/HudComponents.kt`.
 - Debug overlay and Logcat route provide useful input/performance diagnostics.
+- Floating HUD panels use animated transitions (fade in/out, AnimatedContent for cross-panel switches).
+- Gesture toast shows zoom percentage and rotation angle during pinch, sliding up from bottom.
+- Scrollable layers panel with height limit prevents overflow.
+- Canvas auto-centers and auto-fits on startup, new canvas, and reset view.
+- Navigation bar is auto-hidden for immersive drawing experience.
+- New Canvas dialog includes screen-size preset button.
 - Basic undo, clear, layer add/select/visibility, save/load, export/share are present at MVP level.
 
 Still incomplete or temporary:

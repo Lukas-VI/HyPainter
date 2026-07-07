@@ -13,8 +13,9 @@ HyPainter has a runnable MVP build for Android debug. It is not a polished alpha
 - visible committed strokes from Rust RGBA output;
 - active stroke preview in Kotlin for immediate feedback;
 - undo and clear;
-- brush color and size controls;
-- basic layer add/select/hide/show;
+- brush color and size controls (vertical HUD sliders);
+- basic layer add/select/hide/show with scrollable list;
+- layer drag-to-reorder infrastructure (engine support pending);
 - app-private project save/load;
 - PNG export and Android share sheet.
 
@@ -60,4 +61,6 @@ Android Studio debugging notes are tracked in `docs/android-studio-debugging.md`
 - Add tile/dirty-rect incremental refresh for performance.
 - Add richer brush library, texture dynamics, eraser mode, opacity, and blend modes.
 - Add UI for bitmap sampling modes: nearest, linear, bilinear, and bicubic.
+- Tablet drawing UI with floating HUD, animated panel transitions, and gesture toast feedback.
+- Canvas auto-center and auto-fit on startup, new document creation, and viewport reset.
 - Add real device testing on a stylus Android tablet.

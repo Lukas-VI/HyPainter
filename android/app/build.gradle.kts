@@ -12,9 +12,8 @@ android {
         applicationId = "io.github.lukasvi.hypainter"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
-
+        versionCode = 2
+        versionName = "0.2.0-preview"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -39,6 +38,38 @@ android {
             jniLibs.srcDir(layout.buildDirectory.dir("generated/rustJniLibs"))
         }
     }
+}
+
+android {
+    signingConfigs {
+        create("release") {
+            storeFile = file("../hy-painter.keystore")
+            storePassword = "preview123"
+            keyAlias = "hypainter"
+            keyPassword = "preview123"
+        }
+    }
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
+        }
+    }
+}
+
+val buildRustArm64Release by tasks.registering(Exec::class) {
+    workingDir = rootDir
+    commandLine("powershell", "-ExecutionPolicy", "Bypass", "-File",
+        "${rootDir}/scripts/build-rust-android.ps1",
+        "-Target", "aarch64-linux-android",
+        "-Abi", "arm64-v8a",
+        "-OutputDir", "${layout.buildDirectory.get().asFile}/generated/rustJniLibs/arm64-v8a",
+        "-Release",
+    )
+}
+
+tasks.matching { it.name == "mergeReleaseJniLibFolders" }.configureEach {
+    dependsOn(buildRustArm64Release)
 }
 
 val buildRustArm64Debug by tasks.registering(Exec::class) {

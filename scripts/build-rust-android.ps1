@@ -1,4 +1,5 @@
 param(
+    [switch]$Release = $false,
     [string]$Target = "aarch64-linux-android",
     [string]$Abi = "arm64-v8a",
     [string]$OutputDir
@@ -52,7 +53,8 @@ $env:CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER = $clang
 
 Push-Location $rustRoot
 try {
-    cargo build -p hyp_ffi --target $Target
+    # cargo build -p hyp_ffi --target $Target
+    cargo build -p hyp_ffi --target $Target $(if ($Release) { "--release" })
 }
 finally {
     Pop-Location

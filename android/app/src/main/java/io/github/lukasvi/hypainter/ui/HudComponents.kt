@@ -1,4 +1,4 @@
-package io.github.lukasvi.hypainter.ui
+﻿package io.github.lukasvi.hypainter.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -21,7 +21,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.PlainTooltip
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
+import androidx.compose.material3.rememberTooltipState
 import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
 import androidx.compose.material3.IconButton
@@ -33,6 +38,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -43,6 +49,8 @@ import io.github.lukasvi.hypainter.engine.EngineSnapshot
 import io.github.lukasvi.hypainter.engine.PaintingEngine
 import io.github.lukasvi.hypainter.render.BitmapSampling
 import io.github.lukasvi.hypainter.render.CanvasRenderOptions
+
+import io.github.alex3236.lucide.LucideIcons
 
 /**
  * HUD 组件：悬浮工具栏、面板和状态显示。
@@ -85,6 +93,10 @@ internal data class HudMenuActions(
     val onUseWallpaperColorsChanged: (Boolean) -> Unit,
 )
 
+/**
+ * 左侧悬浮工具 HUD：包含画笔库按钮、快速画笔组以及垂直滑块（例如不透明度、大小）。
+ * 该组件会使用一个半透明的 Surface 以保持与画布的视觉分离。
+ */
 @Composable
 internal fun FloatingLeftToolHud(
     modifier: Modifier,
@@ -119,7 +131,6 @@ internal fun FloatingLeftToolHud(
                 onBrushChanged = onBrushChanged,
             )
             VerticalHudSlider(
-                icon = LucideIcons.Droplet,
                 value = brushOpacity,
                 valueRange = 0.05f..1f,
                 enabled = !toolbarBusy,
@@ -127,7 +138,6 @@ internal fun FloatingLeftToolHud(
                 onValueChange = onOpacityChanged,
             )
             VerticalHudSlider(
-                icon = LucideIcons.Size,
                 value = snapshot.brush.radiusPx,
                 valueRange = 2f..96f,
                 enabled = !toolbarBusy,
@@ -138,8 +148,7 @@ internal fun FloatingLeftToolHud(
 }
 
 /**
- * 左侧悬浮工具 HUD：包含画笔库按钮、快速画笔组以及垂直滑块（例如不透明度、大小）。
- * 该组件会使用一个半透明的 Surface 以保持与画布的视觉分离。
+ * 上下居中位于右侧的浮动工具栏：提供常用工具图标（菜单、选择、变换、调色板、图层）。
  */
 
 @Composable
@@ -165,18 +174,19 @@ internal fun FloatingToolBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            ToolbarIcon(LucideIcons.Menu, "Menus", active = activePanel == FloatingPanel.Menu, onClick = onMenuPanel)
-            ToolbarIcon(LucideIcons.Selection, "Selection placeholder", active = false, onClick = onSelectionTool)
-            ToolbarIcon(LucideIcons.Transform, "Transform placeholder", active = false, onClick = onTransformTool)
-            ToolbarIcon(LucideIcons.Tool, "Tool placeholder", active = activePanel == FloatingPanel.Brush, onClick = onToolPanel)
-            ToolbarIcon(LucideIcons.Palette, "Color", active = activePanel == FloatingPanel.Color, onClick = onColorPanel)
-            ToolbarIcon(LucideIcons.Layers, "Layers", active = activePanel == FloatingPanel.Layers, onClick = onLayersPanel)
+            ToolbarIcon(LucideIcons.Menu, "Menus", tooltipText = "Menus", active = activePanel == FloatingPanel.Menu, onClick = onMenuPanel)
+            ToolbarIcon(LucideIcons.SquareDashedMousePointer, "Selection placeholder", tooltipText = "Selection", active = false, onClick = onSelectionTool)
+            ToolbarIcon(LucideIcons.VectorSquare, "Transform placeholder", tooltipText = "Transform", active = false, onClick = onTransformTool)
+            ToolbarIcon(LucideIcons.PencilRuler, "Tool placeholder", tooltipText = "Brush", active = activePanel == FloatingPanel.Brush, onClick = onToolPanel)
+            ToolbarIcon(LucideIcons.Palette, "Color", tooltipText = "Color", active = activePanel == FloatingPanel.Color, onClick = onColorPanel)
+            ToolbarIcon(LucideIcons.Layers2, "Layers", tooltipText = "Layers", active = activePanel == FloatingPanel.Layers, onClick = onLayersPanel)
         }
     }
 }
 
 /**
- * 上下居中位于右侧的浮动工具栏：提供常用工具图标（菜单、选择、变换、调色板、图层）。
+ * 检查面板（Inspector）：根据 `panel` 显示不同内容（菜单 / 画笔 / 图层 / 颜色）。
+ * 通过 `engine` 与 `snapshot` 操作数据，并在需要时调用 `onModelChanged` 更新模型。
  */
 
 @Composable
@@ -209,6 +219,17 @@ internal fun FloatingInspectorPanel(
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f),
                 )
+                if (panel == FloatingPanel.Layers) {
+                    TextButton(
+                        enabled = !toolbarBusy,
+                        onClick = {
+                            engine.addLayer()
+                            onModelChanged()
+                        },
+                    ) {
+                        Icon(LucideIcons.Plus, contentDescription = "Add Layer", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurface)
+                    }
+                }
             }
             when (panel) {
                 FloatingPanel.Menu -> MenuFloatingPanel(menuActions)
@@ -313,7 +334,10 @@ private fun QuickBrushGroup(
     }
 }
 
-/** 快速画笔组：展示几个预设色与画笔，便于快速切换。 */
+/**
+ * 垂直 HUD 滑块：通过旋转水平 Slider 实现竖直显示，带有图标和滑轨。
+ * 常用于展示画笔大小或不透明度控制。
+ */
 
 @Composable
 private fun VerticalHudSlider(
@@ -339,10 +363,8 @@ private fun VerticalHudSlider(
     }
 }
 
-/**
- * 垂直 HUD 滑块：通过旋转水平 Slider 实现竖直显示，带有图标和滑轨。
- * 常用于展示画笔大小或不透明度控制。
- */
+/** 圆形图标按钮，固定大小并用于主工具入口（如画笔库）。 */
+
 
 @Composable
 private fun HudIconButton(
@@ -362,7 +384,9 @@ private fun HudIconButton(
     }
 }
 
-/** 圆形图标按钮，固定大小并用于主工具入口（如画笔库）。 */
+/**
+ * 快速画笔按钮：在圆形背景上展示颜色与图标，用于设置画笔颜色或快速样式切换。
+ */
 
 @Composable
 private fun QuickBrushButton(
@@ -384,34 +408,50 @@ private fun QuickBrushButton(
     }
 }
 
-/**
- * 快速画笔按钮：在圆形背景上展示颜色与图标，用于设置画笔颜色或快速样式切换。
- */
 
+/**
+ * 工具栏图标（标准大小），用于放在主浮动工具栏中。支持 `active` 状态以改变背景与图标颜色。
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ToolbarIcon(
     icon: ImageVector,
     contentDescription: String,
+    tooltipText: String,
     active: Boolean = false,
     onClick: () -> Unit,
 ) {
     val backgroundColor = if (active) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
     val iconTint = if (active) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+    val tooltipState = rememberTooltipState(isPersistent = false)
 
-    IconButton(onClick = onClick, modifier = Modifier.size(48.dp)) {
-        Box(
+    TooltipBox(
+        positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+        tooltip = { PlainTooltip { Text(tooltipText) } },
+        state = tooltipState,
+        enableUserInput = !active,
+    ) {
+        IconButton(
+            onClick = onClick,
             modifier = Modifier
                 .size(48.dp)
-                .background(backgroundColor, CircleShape),
-            contentAlignment = Alignment.Center,
+                .clip(CircleShape),
         ) {
-            Icon(icon, contentDescription = contentDescription, tint = iconTint, modifier = Modifier.size(24.dp))
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .background(backgroundColor, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(icon, contentDescription = contentDescription, tint = iconTint, modifier = Modifier.size(24.dp))
+            }
         }
     }
 }
 
 /**
- * 工具栏图标（标准大小），用于放在主浮动工具栏中。支持 `active` 状态以改变背景与图标颜色。
+ * 菜单面板：展示与文件/画布/视图相关的一系列操作项。
+ * 使用 `HudMenuActions` 传入回调以完成具体行为。
  */
 
 @Composable
@@ -457,10 +497,8 @@ private fun MenuFloatingPanel(actions: HudMenuActions) {
     }
 }
 
-/**
- * 菜单面板：展示与文件/画布/视图相关的一系列操作项。
- * 使用 `HudMenuActions` 传入回调以完成具体行为。
- */
+/** 简单的菜单动作行：使用 `TextButton` 显示并响应点击。 */
+
 
 @Composable
 private fun MenuAction(label: String, enabled: Boolean = true, onClick: () -> Unit) {
@@ -469,7 +507,6 @@ private fun MenuAction(label: String, enabled: Boolean = true, onClick: () -> Un
     }
 }
 
-/** 简单的菜单动作行：使用 `TextButton` 显示并响应点击。 */
 
 @Composable
 private fun BrushFloatingPanel(
@@ -489,8 +526,9 @@ private fun BrushFloatingPanel(
     }
 }
 
+
 /**
- * 画笔面板：显示当前画笔大小控制与占位符说明（画笔库 / 稳定器为后续 UI）。
+ * 图层面板：列出当前快照中的所有图层，允许添加、选择和切换可见性。
  */
 
 @Composable
@@ -500,16 +538,14 @@ private fun LayersFloatingPanel(
     toolbarBusy: Boolean,
     onModelChanged: () -> Unit,
 ) {
+    val scrollState = rememberScrollState()
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Button(
-            enabled = !toolbarBusy,
-            onClick = {
-                engine.addLayer()
-                onModelChanged()
-            },
+Column(
+            modifier = Modifier
+                .heightIn(max = 300.dp)
+                .verticalScroll(scrollState),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text("Add Layer")
-        }
         snapshot.layers.forEach { layer ->
             Surface(
                 shape = RoundedCornerShape(14.dp),
@@ -555,11 +591,13 @@ private fun LayersFloatingPanel(
                 }
             }
         }
+        }
     }
 }
 
 /**
- * 图层面板：列出当前快照中的所有图层，允许添加、选择和切换可见性。
+ * 颜色面板：展示当前颜色、若干色块样式的色板占位符。
+ * 实际产品中可替换为自定义颜色轮。
  */
 
 @Composable
@@ -607,10 +645,8 @@ private fun ColorFloatingPanel(
     }
 }
 
-/**
- * 颜色面板：展示当前颜色、若干色块样式的色板占位符。
- * 实际产品中可替换为自定义颜色轮。
- */
+/** 颜色色板按钮：以圆形显示某个颜色并响应选择。 */
+
 
 @Composable
 private fun ColorSwatch(colorArgb: Int, enabled: Boolean, onClick: () -> Unit) {
@@ -625,7 +661,9 @@ private fun ColorSwatch(colorArgb: Int, enabled: Boolean, onClick: () -> Unit) {
     }
 }
 
-/** 颜色色板按钮：以圆形显示某个颜色并响应选择。 */
+/**
+ * 将 `BitmapSampling` 转换为用于 HUD 显示的文本标签。
+ */
 
 private fun BitmapSampling.hudLabel(): String {
     return when (this) {
@@ -637,9 +675,6 @@ private fun BitmapSampling.hudLabel(): String {
     }
 }
 
-/**
- * 将 `BitmapSampling` 转换为用于 HUD 显示的文本标签。
- */
 
 // preview
 @Preview(showBackground = true, widthDp = 360)

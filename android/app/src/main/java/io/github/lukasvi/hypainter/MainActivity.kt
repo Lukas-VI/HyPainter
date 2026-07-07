@@ -10,8 +10,16 @@ import android.view.WindowInsetsController
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.core.content.FileProvider
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,6 +41,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -44,7 +53,9 @@ import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import io.github.lukasvi.hypainter.debug.CanvasDebugOverlay
 import io.github.lukasvi.hypainter.debug.CanvasDebugState
@@ -56,7 +67,6 @@ import io.github.lukasvi.hypainter.render.BitmapSampling
 import io.github.lukasvi.hypainter.input.CanvasInputRouter
 import io.github.lukasvi.hypainter.render.CanvasRenderOptions
 import io.github.lukasvi.hypainter.render.toFilterQuality
-import io.github.lukasvi.hypainter.ui.CanvasHudStatus
 import io.github.lukasvi.hypainter.ui.FloatingInspectorPanel
 import io.github.lukasvi.hypainter.ui.FloatingLeftToolHud
 import io.github.lukasvi.hypainter.ui.FloatingPanel
@@ -65,13 +75,23 @@ import io.github.lukasvi.hypainter.ui.HudMenuActions
 import io.github.lukasvi.hypainter.ui.HyPainterTheme
 import io.github.lukasvi.hypainter.ui.supportsWallpaperColors
 import java.io.File
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+/**
+ * 应用入口：封装主题并显示主应用界面 `HyPainterApp`。
+ */
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 移除默认背景
+        window.setBackgroundDrawable(null)
+        
         setContent {
             HyPainterApp()
         }
@@ -99,8 +119,10 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+
+
 /**
- * 应用入口：封装主题并显示主应用界面 `HyPainterApp`。
+ * 应用根 Composable：负责主题开关（是否使用壁纸色彩）和承载 `CanvasScreen`。
  */
 
 @Composable
@@ -120,7 +142,13 @@ private fun HyPainterApp() {
 }
 
 /**
- * 应用根 Composable：负责主题开关（是否使用壁纸色彩）和承载 `CanvasScreen`。
+ * 画布屏幕：包含画布渲染、输入路由、工具栏、面板、导出/保存等应用级状态。
+ *
+ * 该函数集中管理：
+ * - 引擎实例与快照 (`engine`, `snapshot`, `toolbarSnapshot`)；
+ * - 视口与输入路由 (`viewport`, `inputRouter`)；
+ * - UI 面板状态和工具栏忙碌状态 (`activePanel`, `toolbarBusy`)；
+ * - 导出/保存/加载等异步操作（使用 `runToolbarIo` 封装）。
  */
 
 @Composable
@@ -136,6 +164,9 @@ private fun CanvasScreen(
     val canvasVersion = remember { mutableStateOf(0) }
     val modelVersion = remember { mutableStateOf(0) }
     val viewport = remember { mutableStateOf(ViewportState()) }
+    val containerSize = remember { mutableStateOf(IntSize(0, 0)) }
+    val hasCentered = remember { mutableStateOf(false) }
+
     val latestPressure = remember { mutableStateOf(0f) }
     val exportStatus = remember { mutableStateOf<String?>(null) }
     val projectStatus = remember { mutableStateOf<String?>(null) }
@@ -154,8 +185,25 @@ private fun CanvasScreen(
             canvasVersion.value++
         }
     }
+    val gestureToastVisible = remember { mutableStateOf(false) }
+    val gestureToastScale = remember { mutableStateOf("100%") }
+    val gestureToastRotation = remember { mutableStateOf("0°") }
+    val gestureHideJob = remember { mutableStateOf<Job?>(null) }
     val snapshot = remember(canvasVersion.value, engine) { engine.canvasSnapshot() }
     val toolbarSnapshot = remember(modelVersion.value, engine) { engine.snapshot() }
+
+    if (containerSize.value.width > 0 && !hasCentered.value) {
+        LaunchedEffect(Unit) {
+            val size = containerSize.value
+            viewport.value = ViewportState(
+                pan = Offset(
+                    (size.width - snapshot.canvasWidth) / 2f,
+                    (size.height - snapshot.canvasHeight) / 2f
+                )
+            )
+            hasCentered.value = true
+        }
+    }
     val refreshCanvas = {
         canvasVersion.value++
         Unit
@@ -269,7 +317,8 @@ private fun CanvasScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
+            .background(MaterialTheme.colorScheme.background)
+            .onSizeChanged { containerSize.value = it },
     ) {
         Canvas(
             modifier = Modifier
@@ -283,11 +332,24 @@ private fun CanvasScreen(
                         activePanel = null
                         return@pointerInteropFilter true
                     }
+                    if (event.action == MotionEvent.ACTION_UP || event.action == MotionEvent.ACTION_CANCEL) {
+                        gestureHideJob.value = coroutineScope.launch {
+                            delay(1500)
+                            gestureToastVisible.value = false
+                        }
+                    }
                     inputRouter.onMotionEvent(
                         event = event,
                         viewport = viewport.value,
                         engine = engine,
-                        onViewportChanged = { viewport.value = it },
+                        onViewportChanged = {
+                        viewport.value = it
+                        gestureHideJob.value?.cancel()
+                        gestureToastVisible.value = true
+                        val scalePct = (it.scale * 100).roundToInt().coerceIn(25, 800)
+                        gestureToastScale.value = "${scalePct}%"
+                        gestureToastRotation.value = "${it.rotation.toInt()}°"
+                    },
                         onEngineChanged = refreshCanvas,
                         onEngineChangedNextFrame = { frameInvalidator.request() },
                         onPressure = { latestPressure.value = it },
@@ -360,41 +422,57 @@ private fun CanvasScreen(
             onLayersPanel = { activePanel = if (activePanel == FloatingPanel.Layers) null else FloatingPanel.Layers },
         )
 
-        activePanel?.let { panel ->
-            val inspectorModifier = if (panel == FloatingPanel.Menu) {
-                Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = 92.dp, end = 18.dp)
-            } else {
-                Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(end = 22.dp)
+        // ---- Animation design ----
+        // Menu fades in/out from top-right. Brush/Layers/Color fade in/out
+        // centered vertically; AnimatedContent handles cross-panel switches.
+        // ----
+        AnimatedVisibility(
+            visible = activePanel == FloatingPanel.Menu,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            Box(Modifier.fillMaxSize()) {
+                FloatingInspectorPanel(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 92.dp, end = 18.dp),
+                    panel = FloatingPanel.Menu,
+                    engine = engine,
+                    snapshot = toolbarSnapshot,
+                    toolbarBusy = toolbarBusy.value,
+                    menuActions = menuActions,
+                    onClose = { activePanel = null },
+                    onModelChanged = refreshModel,
+                )
             }
-
-            FloatingInspectorPanel(
-                modifier = inspectorModifier,
-                panel = panel,
-                engine = engine,
-                snapshot = toolbarSnapshot,
-                toolbarBusy = toolbarBusy.value,
-                menuActions = menuActions,
-                onClose = { activePanel = null },
-                onModelChanged = refreshModel,
-            )
         }
 
-        CanvasHudStatus(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 18.dp),
-            documentTitle = documentTitle,
-            snapshot = toolbarSnapshot,
-            latestPressure = latestPressure.value,
-            exportStatus = exportStatus.value,
-            projectStatus = projectStatus.value,
-            nativeBacked = engine.nativeBacked,
-            renderOptions = renderOptions,
-        )
+        AnimatedContent(
+            targetState = if (activePanel == null || activePanel == FloatingPanel.Menu) null else activePanel,
+            transitionSpec = { fadeIn() togetherWith fadeOut() },
+            label = "panelSwitch",
+            modifier = Modifier.fillMaxSize(),
+        ) { panel ->
+            Box(Modifier.fillMaxSize()) {
+                panel?.let { p ->
+                    FloatingInspectorPanel(
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .padding(end = 22.dp),
+                        panel = panel,
+                        engine = engine,
+                        snapshot = toolbarSnapshot,
+                        toolbarBusy = toolbarBusy.value,
+                        menuActions = menuActions,
+                        onClose = { activePanel = null },
+                        onModelChanged = refreshModel,
+                    )
+                }
+            }
+        }
+
+
 
         if (BuildConfig.DEBUG && debugOverlayVisible.value) {
             CanvasDebugOverlay(
@@ -405,6 +483,28 @@ private fun CanvasScreen(
                 viewport = viewport.value,
                 snapshot = snapshot,
             )
+        }
+
+        // Gesture toast scale + rotation badge, visible during pinch-zoom/rotate
+        AnimatedVisibility(
+            visible = gestureToastVisible.value,
+            enter = slideInVertically { it } + fadeIn(),
+            exit = slideOutVertically { it } + fadeOut(),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 92.dp),
+        ) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.78f),
+            ) {
+                Text(
+                    text = "${gestureToastScale.value}  ${gestureToastRotation.value}",
+                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
         }
 
         if (newCanvasDialogVisible) {
@@ -435,14 +535,10 @@ private fun CanvasScreen(
     }
 }
 
+
 /**
- * 画布屏幕：包含画布渲染、输入路由、工具栏、面板、导出/保存等应用级状态。
- *
- * 该函数集中管理：
- * - 引擎实例与快照 (`engine`, `snapshot`, `toolbarSnapshot`)；
- * - 视口与输入路由 (`viewport`, `inputRouter`)；
- * - UI 面板状态和工具栏忙碌状态 (`activePanel`, `toolbarBusy`)；
- * - 导出/保存/加载等异步操作（使用 `runToolbarIo` 封装）。
+ * 新建画布对话框：允许输入名称和像素尺寸，提供若干预设按钮。
+ * 验证宽高在允许范围内后回调 `onCreate` 创建新文档。
  */
 
 @Composable
@@ -450,9 +546,12 @@ private fun NewCanvasDialog(
     onDismiss: () -> Unit,
     onCreate: (Int, Int, String) -> Unit,
 ) {
+    val screenMetrics = LocalContext.current.resources.displayMetrics
+    val screenWidth = screenMetrics.widthPixels
+    val screenHeight = screenMetrics.heightPixels
     var title by remember { mutableStateOf("Untitled") }
-    var widthText by remember { mutableStateOf("2048") }
-    var heightText by remember { mutableStateOf("2048") }
+    var widthText by remember { mutableStateOf(screenWidth.toString()) }
+    var heightText by remember { mutableStateOf(screenHeight.toString()) }
     val width = widthText.toIntOrNull()
     val height = heightText.toIntOrNull()
     val valid = width != null && height != null && width in CANVAS_MIN_SIZE..CANVAS_MAX_SIZE &&
@@ -496,6 +595,10 @@ private fun NewCanvasDialog(
                         widthText = presetWidth.toString()
                         heightText = presetHeight.toString()
                     }
+                    PresetButton("Screen", screenWidth, screenHeight) { presetWidth, presetHeight ->
+                        widthText = presetWidth.toString()
+                        heightText = presetHeight.toString()
+                    }
                     PresetButton("4K", 4096, 4096) { presetWidth, presetHeight ->
                         widthText = presetWidth.toString()
                         heightText = presetHeight.toString()
@@ -520,10 +623,7 @@ private fun NewCanvasDialog(
     )
 }
 
-/**
- * 新建画布对话框：允许输入名称和像素尺寸，提供若干预设按钮。
- * 验证宽高在允许范围内后回调 `onCreate` 创建新文档。
- */
+/** 预设尺寸按钮，点击后将宽高通过 `onSelect` 回传。 */
 
 @Composable
 private fun PresetButton(
@@ -537,7 +637,9 @@ private fun PresetButton(
     }
 }
 
-/** 预设尺寸按钮，点击后将宽高通过 `onSelect` 回传。 */
+/**
+ * 画布设置对话框：显示当前画布尺寸并允许选择位图采样（BitmapSampling）。
+ */
 
 @Composable
 private fun CanvasSettingsDialog(
@@ -579,7 +681,8 @@ private fun CanvasSettingsDialog(
 }
 
 /**
- * 画布设置对话框：显示当前画布尺寸并允许选择位图采样（BitmapSampling）。
+ * 导出并分享 PNG：先通过 `runToolbarIo` 导出文件，成功后使用 `FileProvider` 分享。
+ * UI 状态通过 `onToolbarBusyChanged` 与 `onExportStatusChanged` 回传。
  */
 
 private fun shareExportedPng(
@@ -619,10 +722,7 @@ private fun shareExportedPng(
     )
 }
 
-/**
- * 导出并分享 PNG：先通过 `runToolbarIo` 导出文件，成功后使用 `FileProvider` 分享。
- * UI 状态通过 `onToolbarBusyChanged` 与 `onExportStatusChanged` 回传。
- */
+/** 将 `BitmapSampling` 转换为用于设置对话框的可读标签。 */
 
 private fun BitmapSampling.label(): String {
     return when (this) {
@@ -634,7 +734,11 @@ private fun BitmapSampling.label(): String {
     }
 }
 
-/** 将 `BitmapSampling` 转换为用于设置对话框的可读标签。 */
+/**
+ * 通用的工具栏异步 IO 封装：
+ * - 防止并发执行（`busy` 标志）
+ * - 在后台线程运行 `block` 并在完成后在回调中返回结果或错误
+ */
 
 private fun <T> runToolbarIo(
     busy: Boolean,
@@ -665,9 +769,8 @@ private fun <T> runToolbarIo(
 }
 
 /**
- * 通用的工具栏异步 IO 封装：
- * - 防止并发执行（`busy` 标志）
- * - 在后台线程运行 `block` 并在完成后在回调中返回结果或错误
+ * 帧无效器：在需要在下一帧重新绘制时（例如引擎变更）调用 `request()`。
+ * 它使用 `View.postOnAnimation` 来安排下一次动画帧回调。
  */
 
 private class FrameInvalidator(
@@ -689,8 +792,8 @@ private class FrameInvalidator(
 }
 
 /**
- * 帧无效器：在需要在下一帧重新绘制时（例如引擎变更）调用 `request()`。
- * 它使用 `View.postOnAnimation` 来安排下一次动画帧回调。
+ * 兼容性变换包装：根据 `ViewportState` 应用平移、旋转与缩放，
+ * 保证在绘制画布元素前正确变换坐标系。
  */
 
 private fun DrawScope.withTransformCompat(
@@ -708,8 +811,7 @@ private fun DrawScope.withTransformCompat(
 }
 
 /**
- * 兼容性变换包装：根据 `ViewportState` 应用平移、旋转与缩放，
- * 保证在绘制画布元素前正确变换坐标系。
+ * 绘制画布背景（白色）。用于清空并作为画布底色。
  */
 
 private fun DrawScope.drawCanvasBackground(width: Int, height: Int) {
@@ -720,7 +822,7 @@ private fun DrawScope.drawCanvasBackground(width: Int, height: Int) {
 }
 
 /**
- * 绘制画布背景（白色）。用于清空并作为画布底色。
+ * 绘制单条笔触：遍历点序列并以压力值调节色彩透明度与线宽。
  */
 
 private fun DrawScope.drawStroke(stroke: EngineStroke) {
@@ -747,7 +849,7 @@ private fun DrawScope.drawStroke(stroke: EngineStroke) {
 }
 
 /**
- * 绘制单条笔触：遍历点序列并以压力值调节色彩透明度与线宽。
+ * 检查指定图层 ID 是否在快照中可见。
  */
 
 private fun io.github.lukasvi.hypainter.engine.EngineSnapshot.layerIsVisible(layerId: Long): Boolean {
@@ -760,13 +862,10 @@ private fun io.github.lukasvi.hypainter.engine.EngineSnapshot.layerIsVisible(lay
     return false
 }
 
-/**
- * 检查指定图层 ID 是否在快照中可见。
- */
+/** 常量：项目文件名、导出文件名以及允许的画布尺寸范围。 */
 
 private const val PROJECT_FILE_NAME = "hypainter-project.hyp"
 private const val EXPORT_FILE_NAME = "hypainter-export.png"
 private const val CANVAS_MIN_SIZE = 64
 private const val CANVAS_MAX_SIZE = 8192
 
-/** 常量：项目文件名、导出文件名以及允许的画布尺寸范围。 */

@@ -241,9 +241,9 @@ internal object LucideIcons {
         lineToRelative(2f, -2f)
         moveTo(17f, 11f)
         lineToRelative(4.3f, 4.3f)
-        curveTo(.94f, .94f, .94f, 2.46f, 0f, 3.4f)
+        curveTo(22.24f, 16.24f, 22.24f, 17.76f, 21.3f, 18.7f)
         lineToRelative(-2.6f, 2.6f)
-        curveTo(-.94f, .94f, -2.46f, .94f, -3.4f, 0f)
+        curveTo(17.76f, 22.24f, 16.24f, 22.24f, 15.3f, 21.3f)
         lineTo(11f, 17f)
         moveTo(21.174f, 6.812f)
         arcToRelative(1f, 1f, 0f, false, false, -3.986f, -3.987f)
@@ -256,6 +256,14 @@ internal object LucideIcons {
         close()
         moveTo(15f, 5f)
         lineToRelative(4f, 4f)
+    }
+
+
+    val Plus = lucide("Plus") {
+        moveTo(5f, 12f)
+        lineTo(19f, 12f)
+        moveTo(12f, 5f)
+        lineTo(12f, 19f)
     }
 
 }

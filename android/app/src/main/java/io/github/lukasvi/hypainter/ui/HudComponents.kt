@@ -35,6 +35,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TooltipAnchorPosition
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,7 +51,6 @@ import io.github.lukasvi.hypainter.engine.PaintingEngine
 import io.github.lukasvi.hypainter.render.BitmapSampling
 import io.github.lukasvi.hypainter.render.CanvasRenderOptions
 
-import io.github.alex3236.lucide.LucideIcons
 
 /**
  * HUD 组件：悬浮工具栏、面板和状态显示。
@@ -139,7 +139,7 @@ internal fun FloatingLeftToolHud(
             )
             VerticalHudSlider(
                 value = snapshot.brush.radiusPx,
-                valueRange = 2f..96f,
+                valueRange = 1f..96f,
                 enabled = !toolbarBusy,
                 onValueChange = { onBrushChanged(snapshot.brush.copy(radiusPx = it)) },
             )
@@ -341,7 +341,7 @@ private fun QuickBrushGroup(
 
 @Composable
 private fun VerticalHudSlider(
-    icon: ImageVector,
+//    icon: ImageVector,
     value: Float,
     valueRange: ClosedFloatingPointRange<Float>,
     enabled: Boolean,
@@ -426,7 +426,9 @@ private fun ToolbarIcon(
     val tooltipState = rememberTooltipState(isPersistent = false)
 
     TooltipBox(
-        positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
+            TooltipAnchorPosition.Below,
+        ),
         tooltip = { PlainTooltip { Text(tooltipText) } },
         state = tooltipState,
         enableUserInput = !active,
